@@ -7,19 +7,34 @@
 // @description Lets you view the greenposts.
 // @match       https://boards.4chan.org/s4s/thread/*
 // @match       http://boards.4chan.org/s4s/thread/*
+// @connect     funposting.online
 // @run-at      document-start
 // @grant       GM_xmlhttpRequest
+// @grant       GM.xmlHttpRequest
 // @icon data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHBhdGggZD0iTTAgMEgxNlYxNkgwIiBmaWxsPSIjZGZkIi8+PHBhdGggZD0iTTMgNCA2IDFoNGwzIDN2OGwtMyAzSDZMMyAxMiIgZmlsbD0iZ3JlZW4iLz48cGF0aCBkPSJtNS41IDExLjVoLTJ2LTdoMnYtM2MtMyAwLTUgMi41LTUgNi41IDAgNCAyIDYuNSA1IDYuNXptNSAzYzMgMCA1LTIuNSA1LTYuNSAwLTQtMi02LjUtNS02LjV2M2gydjdoLTJ6bS00LTRoM0wxMCAyLjVINlptMCAzaDN2LTNoLTN6IiBmaWxsPSIjZmZmIiBzdHJva2U9ImdyZWVuIi8+PC9zdmc+
 // ==/UserScript==
+
+if(query("#s4sinterface-css")){
+	throw "Multiple instances of [s4s] interface detected"
+}
 
 var threadId=location.pathname.match(/\/thread\/(\d+)/)[1]
 var weekdays=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
 var postFormClassic
+var postFormQR
 var postFormQRX
+var showRealQR
 
 // Request green posts
 var serverurl="https://funposting.online/interface/"
-GM_xmlhttpRequest({
+
+if(typeof GM=="undefined"){
+	window.GM={
+		xmlHttpRequest:window.GM_xmlhttpRequest
+	}
+}
+
+GM.xmlHttpRequest({
 	method:"get",
 	url:serverurl+"get.php?thread="+threadId,
 	onload:response=>{
@@ -34,27 +49,39 @@ GM_xmlhttpRequest({
 	}
 })
 
-// 4chan-X QR integration
-document.addEventListener("QRDialogCreation",onQRXCreated,false)
-
 onPageLoad(_=>{
 	// Classic post form
 	var nameField=query("#postForm input[name=name]")
-	var greenToggle=element(
-		["button#toggle",{
-			class:"greenToggle",
-			title:"[s4s] Interface",
-			onclick:event=>{
-				event.preventDefault()
-				event.stopPropagation()
-				showPostFormClassic()
-			}
-		},"!"]
-	).toggle
-	var nameParent=nameField.parentNode
-	nameParent.classList.add("nameFieldParent")
-	nameParent.insertBefore(greenToggle,nameField)
+	if(nameField){
+		var greenToggle=element(
+			["button#toggle",{
+				class:"greenToggle",
+				title:"[s4s] Interface",
+				onclick:event=>{
+					event.preventDefault()
+					event.stopPropagation()
+					showPostFormClassic()
+				}
+			},"!"]
+		).toggle
+		var nameParent=nameField.parentNode
+		nameParent.classList.add("nameFieldParent")
+		nameParent.insertBefore(greenToggle,nameField)
+	}else{
+		showPostFormClassic()
+	}
 })
+
+// Native extension QR
+document.addEventListener("QRNativeDialogCreation",onQRCreated)
+if(unsafeWindow.Main){
+	onNativeextInit()
+}else{
+	document.addEventListener("4chanMainInit",onNativeextInit)
+}
+
+// 4chan-X QR integration
+document.addEventListener("QRDialogCreation",onQRXCreated)
 
 function onPageLoad(func){
 	if(document.readyState=="loading"){
@@ -187,17 +214,27 @@ function showPostFormClassic(hide){
 	var commentField=query(formSelector+" textarea")
 	if(hide){
 		if(postFormClassic){
-			nameField.value=postFormClassic.name.value
-			optionsField.value=postFormClassic.options.value
-			commentField.value=postFormClassic.comment.value
+			if(nameField){
+				nameField.value=postFormClassic.name.value
+				optionsField.value=postFormClassic.options.value
+				commentField.value=postFormClassic.comment.value
+			}
 			postFormClassic.form.parentNode.removeChild(postFormClassic.form)
 			postFormClassic=0
 		}
 		return
 	}
-	var postForm=query("#postForm").parentNode
-	if(postFormClassic||!postForm){
+	if(postFormClassic){
 		return
+	}
+	var username=""
+	if(nameField){
+		username=nameField.value
+	}else{
+		var nameMatch=document.cookie.match(/4chan_name=(.*?)(?:;|$)/)
+		if(nameMatch){
+			username=nameMatch[1]
+		}
 	}
 	postFormClassic=element(
 		["form#form",{
@@ -216,21 +253,23 @@ function showPostFormClassic(hide){
 					["td",{
 						class:"nameFieldParent"
 					},
-						["button#toggle",{
-							class:"greenToggle pressed",
-							title:"[s4s] Interface",
-							onclick:event=>{
-								event.preventDefault()
-								event.stopPropagation()
-								showPostFormClassic(1)
-							}
-						},"!"],
+						(nameField&&
+							["button#toggle",{
+								class:"greenToggle pressed",
+								title:"[s4s] Interface",
+								onclick:event=>{
+									event.preventDefault()
+									event.stopPropagation()
+									showPostFormClassic(1)
+								}
+							},"!"]
+						),
 						["input#name",{
 							type:"text",
 							name:"username",
 							tabIndex:1,
 							placeholder:"Anonymous",
-							value:nameField.value
+							value:username
 						}]
 					]
 				],
@@ -241,7 +280,7 @@ function showPostFormClassic(hide){
 							type:"text",
 							name:"options",
 							tabIndex:2,
-							value:optionsField.value
+							value:optionsField?optionsField.value:""
 						}],
 						["input",{
 							type:"submit",
@@ -259,7 +298,7 @@ function showPostFormClassic(hide){
 							cols:48,
 							rows:4,
 							wrap:"soft",
-							value:commentField.value
+							value:commentField?commentField.value:""
 						}]
 					]
 				]
@@ -267,7 +306,141 @@ function showPostFormClassic(hide){
 			]
 		]
 	)
+	var postForm=query("#postForm")
+	if(postForm){
+		postForm=postForm.parentNode
+	}else{
+		postForm=query("body>.closed+*")
+		if(!postForm){
+			postForm=query("#op")
+		}
+	}
 	postForm.parentNode.insertBefore(postFormClassic.form,postForm)
+}
+
+// Native extension quick reply
+function onNativeextInit(){
+	showRealQR=unsafeWindow.QR.show
+	var newQRshow=function(){
+		var event=document.createEvent("Event")
+		event.initEvent("QRNativeDialogCreation",false,false)
+		document.dispatchEvent(event)
+	}
+	if(typeof exportFunction=="function"){
+		newQRshow=exportFunction(newQRshow,document.defaultView)
+	}
+	unsafeWindow.QR.show=newQRshow
+}
+
+function onQRCreated(event){
+	console.log(event)
+	try{
+		showRealQR(threadId)
+	}catch(e){}
+	var formSelector="#qrForm"
+	var nameField=query(formSelector+" input[name=name]")
+	nameField.tabIndex=0
+	var oldToggle=query("#quickReply .greenToggle")
+	if(oldToggle){
+		oldToggle.parentNode.removeChild(oldToggle)
+	}
+	var toggle=element(
+		["button#toggle",{
+			type:"button",
+			class:"greenToggle",
+			title:"[s4s] Interface",
+			onclick:event=>{
+				event.preventDefault()
+				event.stopPropagation()
+				showPostFormQR()
+			}
+		},"!"]
+	).toggle
+	var nameParent=nameField.parentNode
+	nameParent.classList.add("nameFieldParent")
+	nameParent.insertBefore(toggle,nameField)
+}
+
+function showPostFormQR(hide){
+	var formSelector="#qrForm"
+	var nameField=query(formSelector+" input[name=name]")
+	var optionsField=query(formSelector+" input[name=email]")
+	var commentField=query(formSelector+" textarea")
+	if(hide){
+		if(postFormQR){
+			nameField.value=postFormQR.name.value
+			optionsField.value=postFormQR.options.value
+			commentField.value=postFormQR.comment.value
+			postFormQR.form.parentNode.removeChild(postFormQR.form)
+			postFormQR=0
+		}
+		return
+	}
+	var qr=query("#quickReply form:not(.greenPostForm)")
+	if(postFormQR||!qr){
+		return
+	}
+	postFormQR=element(
+		["form#form",{
+			name:"post",
+			action:serverurl+"post.php",
+			method:"post",
+			enctype:"multipart/form-data",
+			class:"greenPostForm"
+		},
+			["input",{
+				name:"thread",
+				value:threadId,
+				type:"hidden"
+			}],
+			["div",{
+				class:"nameFieldParent"
+			},
+				["button",{
+					type:"button",
+					class:"greenToggle pressed",
+					title:"[s4s] Interface",
+					onclick:event=>{
+						showPostFormQR(1)
+					}
+				},"!"],
+				["input#name",{
+					type:"text",
+					name:"username",
+					class:"field",
+					placeholder:"Anonymous",
+					value:nameField.value
+				}]
+			],
+			["div",
+				["input#options",{
+					type:"text",
+					name:"options",
+					class:"field",
+					placeholder:"Options",
+					value:optionsField.value
+				}]
+			],
+			["div",
+				["textarea#comment",{
+					name:"text",
+					class:"field",
+					cols:48,
+					rows:4,
+					wrap:"soft",
+					placeholder:"Comment",
+					value:commentField.value
+				}],
+			],
+			["div",
+				["input",{
+					type:"submit",
+					value:"Post"
+				}]
+			]
+		]
+	)
+	qr.parentNode.insertBefore(postFormQR.form,qr)
 }
 
 // 4chan-X QR
@@ -282,6 +455,8 @@ function onQRXCreated(){
 			class:"greenToggle",
 			title:"[s4s] Interface",
 			onclick:event=>{
+				event.preventDefault()
+				event.stopPropagation()
 				showPostFormQRX()
 			}
 		},"!"]
@@ -304,8 +479,8 @@ function showPostFormQRX(hide){
 		}
 		return
 	}
-	var qr=query("#qr>form")
-	if(postFormQRX||!qr){
+	var qrx=query("#qr>form")
+	if(postFormQRX||!qrx){
 		return
 	}
 	postFormQRX=element(
@@ -333,6 +508,7 @@ function showPostFormQRX(hide){
 					}
 				},"!"],
 				["input#name",{
+					type:"text",
 					name:"username",
 					class:"field",
 					placeholder:"Name",
@@ -340,6 +516,7 @@ function showPostFormQRX(hide){
 					value:nameField.value
 				}],
 				["input#options",{
+					type:"text",
 					name:"options",
 					class:"field",
 					placeholder:"Options",
@@ -363,12 +540,13 @@ function showPostFormQRX(hide){
 			]
 		]
 	)
-	qr.parentNode.insertBefore(postFormQRX.form,qr)
+	qrx.parentNode.insertBefore(postFormQRX.form,qrx)
 }
 
 // Stylesheet
-var blob=new Blob([`
+var stylesheet=`
 .greenPostForm+form .postForm>tbody>tr:not(.rules),
+#quickReply .greenPostForm+form,
 #qr .greenPostForm+form{
 	display:none;
 }
@@ -415,22 +593,27 @@ var blob=new Blob([`
 .postForm .greenToggle+input{
 	width:220px!important;
 }
-.postForm .nameFieldParent{
+.postForm .nameFieldParent,
+#quickReply .nameFieldParent{
 	display:flex;
 	flex-direction:row;
 }
 .postForm textarea{
-    width:292px;
+	width:292px;
 }
-`],{
-	type:"text/css"
-})
+#quickReply .greenToggle{
+	width:23px;
+	height:23px;
+}
+#quickReply .greenToggle+input{
+	width:273px!important;
+}
+`.replace(/\n\s*/g,"")
 element(
-	document.head,
-	["link",{
-		rel:"stylesheet",
-		href:URL.createObjectURL(blob)
-	}]
+	document.head||document.documentElement,
+	["style",{
+		id:"s4sinterface-css"
+	},stylesheet]
 )
 
 function query(selector){
