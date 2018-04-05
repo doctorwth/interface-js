@@ -245,7 +245,7 @@ function showPostFormClassic(hide){
 			class:"greenPostForm"
 		},
 			["table",{
-				class:"postForm hideMobile"
+				class:"postForm"
 			},
 				["tbody",
 				["tr",
@@ -548,7 +548,7 @@ var stylesheet=`
 .greenPostForm+form .postForm>tbody>tr:not(.rules),
 #quickReply .greenPostForm+form,
 #qr .greenPostForm+form{
-	display:none;
+	display:none!important;
 }
 .greenPostForm .file-n-submit{
 	display:flex;
@@ -607,6 +607,19 @@ var stylesheet=`
 }
 #quickReply .greenToggle+input{
 	width:273px!important;
+}
+@media only screen and (max-width:480px){
+	.postForm .greenToggle+input{
+		width:196px!important;
+	}
+	.postForm input[type="submit"]{
+		width:60px;
+		padding:2px 4px 3px;
+		margin:0;
+	}
+	.postForm:not(.hideMobile){
+		margin-top:20px;
+	}
 }
 `.replace(/\n\s*/g,"")
 element(
