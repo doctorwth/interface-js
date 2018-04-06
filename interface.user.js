@@ -25,28 +25,28 @@ var postFormQR
 var postFormQRX
 var showRealQR
 
-// Request green posts
-var serverurl="https://funposting.online/interface/"
-
 if(typeof GM=="undefined"){
 	window.GM={
 		xmlHttpRequest:window.GM_xmlhttpRequest
 	}
 }
 
+// Request green posts
+var serverurl="https://funposting.online/interface/"
 GM.xmlHttpRequest({
 	method:"get",
 	url:serverurl+"get.php?thread="+threadId,
 	onload:response=>{
 		if(response.status==200){
 			onPageLoad(_=>{
-				var postsobj=Object.keys(JSON.parse(response.responseText))
-				if(postsobj.length){
-					threadingX(_=>
-						postsobj.forEach(i=>{
-							addPost(postsobj[i])
-						})
-					)
+				var postsObj=JSON.parse(response.responseText)
+				var postsCount=Object.keys(postsObj).length
+				if(postsCount){
+					threadingX(_=>{
+						for(var i=0;i<postsCount;i++){
+							addPost(postsObj[i])
+						}
+					})
 				}
 			})
 		}
