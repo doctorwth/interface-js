@@ -41,9 +41,11 @@ GM.xmlHttpRequest({
 		if(response.status==200){
 			onPageLoad(_=>{
 				var postsobj=JSON.parse(response.responseText)
-				Object.keys(postsobj).forEach(i=>{
-					addPost(postsobj[i])
-				})
+				threadingX(_=>
+					Object.keys(postsobj).forEach(i=>{
+						addPost(postsobj[i])
+					})
+				)
 			})
 		}
 	}
@@ -332,8 +334,7 @@ function onNativeextInit(){
 	unsafeWindow.QR.show=newQRshow
 }
 
-function onQRCreated(event){
-	console.log(event)
+function onQRCreated(){
 	try{
 		showRealQR(threadId)
 	}catch(e){}
@@ -508,7 +509,6 @@ function showPostFormQRX(hide){
 					}
 				},"!"],
 				["input#name",{
-					type:"text",
 					name:"username",
 					class:"field",
 					placeholder:"Name",
@@ -516,7 +516,6 @@ function showPostFormQRX(hide){
 					value:nameField.value
 				}],
 				["input#options",{
-					type:"text",
 					name:"options",
 					class:"field",
 					placeholder:"Options",
@@ -541,6 +540,31 @@ function showPostFormQRX(hide){
 		]
 	)
 	qrx.parentNode.insertBefore(postFormQRX.form,qrx)
+}
+
+// Disable 4chan-X threading when inserting posts
+function threadingX(func){
+	if(
+		document.documentElement.classList.contains("fourchan-x","thread-view")
+		&&query(".threadContainer")
+	){
+		var menuButton=query("#shortcut-menu>.menu-button")
+		if(!menuButton){
+			return func()
+		}
+		menuButton.click()
+		var threadingCheckbox=query("#threadingControl")
+		if(!threadingCheckbox){
+			menuButton.click()
+			return func()
+		}
+		threadingCheckbox.click()
+		func()
+		threadingCheckbox.click()
+		menuButton.click()
+	}else{
+		func()
+	}
 }
 
 // Stylesheet
