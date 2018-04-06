@@ -40,12 +40,14 @@ GM.xmlHttpRequest({
 	onload:response=>{
 		if(response.status==200){
 			onPageLoad(_=>{
-				var postsobj=JSON.parse(response.responseText)
-				threadingX(_=>
-					Object.keys(postsobj).forEach(i=>{
-						addPost(postsobj[i])
-					})
-				)
+				var postsobj=Object.keys(JSON.parse(response.responseText))
+				if(postsobj.length){
+					threadingX(_=>
+						postsobj.forEach(i=>{
+							addPost(postsobj[i])
+						})
+					)
+				}
 			})
 		}
 	}
