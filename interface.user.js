@@ -112,7 +112,6 @@ function getGreenPosts(){
 
 // Add a post to the proper position in the thread
 function addPost(aPost){
-  console.log(aPost);
 	var numberless=aPost.options=="numberless"
 	var afterNo=numberless?"XXXXXX":aPost.after_no
 	var postId=afterNo+"-"+aPost.id
