@@ -359,12 +359,14 @@ function onQRCreated(){
 	try{
 		showRealQR(threadId)
 	}catch(e){}
-	if(query("#quickReply .qrToggle")){
-		return
-	}
-	var oldToggle=query("#quickReply .greenToggle")
+	// Clean up post form if it was initialised before
+	var oldToggle=query("#quickReply form:not(.greenPostForm) .greenToggle")
 	if(oldToggle){
 		removeChild(oldToggle)
+	}
+	var oldPostForm=query("#quickReply form:not(.greenPostForm)")
+	if(oldPostForm){
+		showPostFormQR(1)
 	}
 	var formSelector="#qrForm"
 	var nameField=query(formSelector+" input[name=name]")
@@ -374,7 +376,7 @@ function onQRCreated(){
 	var toggle=element(
 		["button#toggle",{
 			type:"button",
-			class:"greenToggle qrToggle",
+			class:"greenToggle",
 			title:"[s4s] Interface",
 			onclick:event=>{
 				event.preventDefault()
