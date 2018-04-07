@@ -23,7 +23,6 @@ var threadId=location.pathname.match(/\/thread\/(\d+)/)[1]
 var weekdays=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
 var postForm={}
 var lastCommentForm
-var showRealQR
 var updateLinks=new Set()
 
 if(typeof GM=="undefined"){
@@ -693,7 +692,7 @@ function submitGreenPost(event,form){
 			if(response.status==200){
 				if(/Post Successful/.test(response.responseText)){
 					form.getElementsByTagName("textarea")[0].value=""
-					query("[data-cmd=update],.updatelink>a").click()
+					getGreenPosts()
 				}else{
 					return postSubmitted(submit,response.status,response.responseText)
 				}
@@ -802,7 +801,7 @@ var stylesheet=`
 	background-color:#e1e1e1;
 	box-sizing:border-box;
 	user-select:none;
-	font:400 13.3333px Arial;
+	font:400 13.3333px Arial,sans-serif;
 	font:-moz-button;
 	color:#000;
 	cursor:default;
