@@ -112,6 +112,7 @@ function getGreenPosts(){
 
 // Add a post to the proper position in the thread
 function addPost(aPost){
+  console.log(aPost);
 	var numberless=aPost.options=="numberless"
 	var afterNo=numberless?"XXXXXX":aPost.after_no
 	var postId=afterNo+"-"+aPost.id
@@ -204,7 +205,7 @@ function addPost(aPost){
 				["blockquote",{
 					class:"postMessage",
 					id:"m"+postId,
-					innerHTML:aPost.text
+					innerHTML:aPost.text.replace(/\r/g,'')
 				}]
 			]
 		]
@@ -677,7 +678,7 @@ function submitGreenPost(event,form){
 	for(nameValue of formData){
 		data.push(
 			nameValue[0]+"="
-			+encodeURIComponent(nameValue[1])
+			+encodeURIComponent(nameValue[1].replace(/\r\n/g, "\r").replace(/\n/g, "\r"))
 		)
 	}
 	data=data.join("&")
