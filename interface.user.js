@@ -11,6 +11,7 @@
 // @run-at      document-start
 // @grant       GM_xmlhttpRequest
 // @grant       GM.xmlHttpRequest
+// @grant       unsafeWindow
 // @icon data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHBhdGggZD0iTTAgMEgxNlYxNkgwIiBmaWxsPSIjZGZkIi8+PHBhdGggZD0iTTMgNCA2IDFoNGwzIDN2OGwtMyAzSDZMMyAxMiIgZmlsbD0iZ3JlZW4iLz48cGF0aCBkPSJtNS41IDExLjVoLTJ2LTdoMnYtM2MtMyAwLTUgMi41LTUgNi41IDAgNCAyIDYuNSA1IDYuNXptNSAzYzMgMCA1LTIuNSA1LTYuNSAwLTQtMi02LjUtNS02LjV2M2gydjdoLTJ6bS00LTRoM0wxMCAyLjVINlptMCAzaDN2LTNoLTN6IiBmaWxsPSIjZmZmIiBzdHJva2U9ImdyZWVuIi8+PC9zdmc+
 // ==/UserScript==
 
@@ -104,6 +105,8 @@ function getGreenPosts(){
 					}
 				})
 			}
+		},
+		onerror:response=>{
 		}
 	})
 }
@@ -263,8 +266,14 @@ function showPostFormClassic(hide){
 			action:serverurl+"post.php",
 			method:"post",
 			enctype:"multipart/form-data",
-			class:"greenPostForm"
+			class:"greenPostForm",
+			onsubmit:submitGreenPost
 		},
+			["input",{
+				name:"thread",
+				value:threadId,
+				type:"hidden"
+			}],
 			["table",{
 				class:"postForm"
 			},
@@ -343,7 +352,7 @@ function showPostFormClassic(hide){
 // Native extension quick reply
 function onNativeextInit(){
 	getUpdateLinks()
-	showRealQR=unsafeWindow.QR.show
+	unsafeWindow.QR.showInterface=unsafeWindow.QR.show
 	var newQRshow=function(){
 		var event=document.createEvent("Event")
 		event.initEvent("QRNativeDialogCreation",false,false)
@@ -357,7 +366,7 @@ function onNativeextInit(){
 
 function onQRCreated(){
 	try{
-		showRealQR(threadId)
+		unsafeWindow.QR.showInterface(threadId)
 	}catch(e){}
 	// Clean up post form if it was initialised before
 	var oldToggle=query("#quickReply form:not(.greenPostForm) .greenToggle")
@@ -416,7 +425,8 @@ function showPostFormQR(hide){
 			action:serverurl+"post.php",
 			method:"post",
 			enctype:"multipart/form-data",
-			class:"greenPostForm"
+			class:"greenPostForm",
+			onsubmit:submitGreenPost
 		},
 			["input",{
 				name:"thread",
@@ -463,10 +473,12 @@ function showPostFormQR(hide){
 				}],
 			],
 			["div",
-				["input",{
-					type:"submit",
-					value:"Post"
-				}]
+				["span",{
+					class:"greenSubmit",
+					onclick:event=>{
+						submitGreenPost(event,postForm.QR.form)
+					}
+				},"Post"]
 			]
 		]
 	)
@@ -525,7 +537,8 @@ function showPostFormQRX(hide){
 			action:serverurl+"post.php",
 			method:"post",
 			enctype:"multipart/form-data",
-			class:"greenPostForm"
+			class:"greenPostForm",
+			onsubmit:submitGreenPost
 		},
 			["input",{
 				name:"thread",
@@ -641,6 +654,79 @@ function getUpdateLinks(){
 	}
 }
 
+// Submit a green post
+function submitGreenPost(event,form){
+	event.preventDefault()
+	event.stopPropagation()
+	if(!form){
+		form=event.currentTarget
+	}
+	var submit={}
+	submit.button=form.querySelector(":scope input[type=submit],:scope .greenSubmit")
+	submit.fakeButton=submit.button.classList.contains("greenSubmit")
+	if(submit.fakeButton){
+		submit.text=submit.button.firstChild.data
+		submit.button.firstChild.data="..."
+		submit.button.classList.add("greenSubmitDisabled")
+	}else{
+		submit.text=submit.button.value
+		submit.button.value="..."
+		submit.button.disabled=1
+	}
+	var data=[]
+	var formData=new FormData(form)
+	for(nameValue of formData){
+		data.push(
+			nameValue[0]+"="
+			+encodeURIComponent(nameValue[1])
+		)
+	}
+	data=data.join("&")
+	GM.xmlHttpRequest({
+		method:"post",
+		headers:{
+			"Content-type":"application/x-www-form-urlencoded"
+		},
+		url:serverurl+"post.php",
+		data:data,
+		onload:response=>{
+			if(response.status==200){
+				if(/Post Successful/.test(response.responseText)){
+					form.getElementsByTagName("textarea")[0].value=""
+					query("[data-cmd=update],.updatelink>a").click()
+				}else{
+					return postSubmitted(submit,response.status,response.responseText)
+				}
+			}
+			postSubmitted(submit,response.status)
+		},
+		onerror:response=>{
+			postSubmitted(submit)
+		}
+	})
+}
+
+function postSubmitted(submit,errorCode,responseText){
+	if(submit.fakeButton){
+		submit.button.firstChild.data=submit.text
+		submit.button.classList.remove("greenSubmitDisabled")
+	}else{
+		submit.button.value=submit.text
+		submit.button.disabled=0
+	}
+	if(errorCode==200){
+		if(responseText){
+			alert("Could not submit post ("+responseText+")")
+		}
+	}else{
+		var alertText="Could not connect to the [s4s] interface"
+		if(errorCode){
+			alertText+=" ("+errorCode+")"
+		}
+		alert(alertText)
+	}
+}
+
 // Stylesheet
 var stylesheet=`
 .greenPostForm+form .postForm>tbody>tr:not(.rules),
@@ -705,6 +791,33 @@ var stylesheet=`
 }
 #quickReply .greenToggle+input{
 	width:273px!important;
+}
+.greenSubmit{
+	display:inline-block;
+	width:75px;
+	float:right;
+	padding:1px 6px;
+	text-align:center;
+	border:1px solid #adadad;
+	background-color:#e1e1e1;
+	box-sizing:border-box;
+	user-select:none;
+	font:400 13.3333px Arial;
+	font:-moz-button;
+	color:#000;
+	cursor:default;
+}
+.greenSubmit:hover{
+	border-color:#0078d7;
+	background-color:#e5f1fb;
+}
+.greenSubmit:active{
+	border-color:#005499;
+	background-color:#cce4f7;
+}
+.greenSubmitDisabled{
+	color:#808080;
+	pointer-events:none;
 }
 @media only screen and (max-width:480px){
 	.postForm .greenToggle+input{
