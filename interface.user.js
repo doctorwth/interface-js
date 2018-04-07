@@ -20,10 +20,10 @@ if(query("#s4sinterface-css")){
 
 var threadId=location.pathname.match(/\/thread\/(\d+)/)[1]
 var weekdays=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
-var postFormClassic
-var postFormQR
-var postFormQRX
+var postForm={}
+var lastCommentForm
 var showRealQR
+var updateLinks=new Set()
 
 if(typeof GM=="undefined"){
 	window.GM={
@@ -33,30 +33,14 @@ if(typeof GM=="undefined"){
 
 // Request green posts
 var serverurl="https://funposting.online/interface/"
-GM.xmlHttpRequest({
-	method:"get",
-	url:serverurl+"get.php?thread="+threadId,
-	onload:response=>{
-		if(response.status==200){
-			onPageLoad(_=>{
-				var postsObj=JSON.parse(response.responseText)
-				var postsCount=Object.keys(postsObj).length
-				if(postsCount){
-					threadingX(_=>{
-						for(var i=0;i<postsCount;i++){
-							addPost(postsObj[i])
-						}
-					})
-				}
-			})
-		}
-	}
-})
+getGreenPosts()
 
 onPageLoad(_=>{
 	// Classic post form
 	var nameField=query("#postForm input[name=name]")
 	if(nameField){
+		var commentField=query("#postForm textarea")
+		addCommentForm(commentField,1)
 		var greenToggle=element(
 			["button#toggle",{
 				class:"greenToggle",
@@ -70,10 +54,12 @@ onPageLoad(_=>{
 		).toggle
 		var nameParent=nameField.parentNode
 		nameParent.classList.add("nameFieldParent")
-		nameParent.insertBefore(greenToggle,nameField)
+		insertBefore(greenToggle,nameField)
 	}else{
+		// Thread is archived
 		showPostFormClassic()
 	}
+	getUpdateLinks()
 })
 
 // Native extension QR
@@ -93,6 +79,33 @@ function onPageLoad(func){
 	}else{
 		func()
 	}
+}
+
+// Request green posts
+function getGreenPosts(){
+	GM.xmlHttpRequest({
+		method:"get",
+		url:serverurl+"get.php?thread="+threadId,
+		onload:response=>{
+			if(response.status==200){
+				onPageLoad(_=>{
+					var postsObj=JSON.parse(response.responseText)
+					var postsCount=Object.keys(postsObj).length
+					if(postsCount){
+						threadingX(_=>{
+							var oldPosts=queryAll(".greenPostContainer")
+							for(var i=0;i<oldPosts.length;i++){
+								removeChild(oldPosts[i])
+							}
+							for(var i=0;i<postsCount;i++){
+								addPost(postsObj[i])
+							}
+						})
+					}
+				})
+			}
+		}
+	})
 }
 
 // Add a post to the proper position in the thread
@@ -119,6 +132,7 @@ function addPost(aPost){
 			},"No."],
 			["a",{
 				href:"javascript:quote('"+postId+"');",
+				onclick:insertQuote,
 				title:"Reply to this post"
 			},postId]
 		]
@@ -179,7 +193,9 @@ function addPost(aPost){
 					},dateString],
 					(!numberless&&
 						["span",{
-							class:"postNum desktop"
+							class:"postNum desktop",
+							onclick:insertQuote,
+							title:"Reply to this post"
 						},linkReply]
 					)
 				],
@@ -205,7 +221,7 @@ function addPost(aPost){
 			}
 			currentPost=prevPost
 		}
-		currentPost.parentNode.insertBefore(post,currentPost)
+		insertBefore(post,currentPost)
 	}
 	return
 }
@@ -217,18 +233,19 @@ function showPostFormClassic(hide){
 	var optionsField=query(formSelector+" input[name=email]")
 	var commentField=query(formSelector+" textarea")
 	if(hide){
-		if(postFormClassic){
+		if(postForm.classic){
 			if(nameField){
-				nameField.value=postFormClassic.name.value
-				optionsField.value=postFormClassic.options.value
-				commentField.value=postFormClassic.comment.value
+				nameField.value=postForm.classic.name.value
+				optionsField.value=postForm.classic.options.value
+				commentField.value=postForm.classic.comment.value
+				lastCommentForm=commentField
 			}
-			postFormClassic.form.parentNode.removeChild(postFormClassic.form)
-			postFormClassic=0
+			removeChild(postForm.classic.form)
+			postForm.classic=0
 		}
 		return
 	}
-	if(postFormClassic){
+	if(postForm.classic){
 		return
 	}
 	var username=""
@@ -240,7 +257,7 @@ function showPostFormClassic(hide){
 			username=nameMatch[1]
 		}
 	}
-	postFormClassic=element(
+	postForm.classic=element(
 		["form#form",{
 			name:"post",
 			action:serverurl+"post.php",
@@ -310,20 +327,22 @@ function showPostFormClassic(hide){
 			]
 		]
 	)
-	var postForm=query("#postForm")
-	if(postForm){
-		postForm=postForm.parentNode
+	addCommentForm(postForm.classic.comment)
+	originalForm=query("#postForm")
+	if(originalForm){
+		originalForm=originalForm.parentNode
 	}else{
-		postForm=query("body>.closed+*")
-		if(!postForm){
-			postForm=query("#op")
+		originalForm=query("body>.closed+*")
+		if(!originalForm){
+			originalForm=query("#op")
 		}
 	}
-	postForm.parentNode.insertBefore(postFormClassic.form,postForm)
+	insertBefore(postForm.classic.form,originalForm)
 }
 
 // Native extension quick reply
 function onNativeextInit(){
+	getUpdateLinks()
 	showRealQR=unsafeWindow.QR.show
 	var newQRshow=function(){
 		var event=document.createEvent("Event")
@@ -340,17 +359,22 @@ function onQRCreated(){
 	try{
 		showRealQR(threadId)
 	}catch(e){}
+	if(query("#quickReply .qrToggle")){
+		return
+	}
+	var oldToggle=query("#quickReply .greenToggle")
+	if(oldToggle){
+		removeChild(oldToggle)
+	}
 	var formSelector="#qrForm"
 	var nameField=query(formSelector+" input[name=name]")
 	nameField.tabIndex=0
-	var oldToggle=query("#quickReply .greenToggle")
-	if(oldToggle){
-		oldToggle.parentNode.removeChild(oldToggle)
-	}
+	var commentField=query(formSelector+" textarea")
+	addCommentForm(commentField)
 	var toggle=element(
 		["button#toggle",{
 			type:"button",
-			class:"greenToggle",
+			class:"greenToggle qrToggle",
 			title:"[s4s] Interface",
 			onclick:event=>{
 				event.preventDefault()
@@ -361,7 +385,7 @@ function onQRCreated(){
 	).toggle
 	var nameParent=nameField.parentNode
 	nameParent.classList.add("nameFieldParent")
-	nameParent.insertBefore(toggle,nameField)
+	insertBefore(toggle,nameField)
 }
 
 function showPostFormQR(hide){
@@ -370,20 +394,21 @@ function showPostFormQR(hide){
 	var optionsField=query(formSelector+" input[name=email]")
 	var commentField=query(formSelector+" textarea")
 	if(hide){
-		if(postFormQR){
-			nameField.value=postFormQR.name.value
-			optionsField.value=postFormQR.options.value
-			commentField.value=postFormQR.comment.value
-			postFormQR.form.parentNode.removeChild(postFormQR.form)
-			postFormQR=0
+		if(postForm.QR){
+			nameField.value=postForm.QR.name.value
+			optionsField.value=postForm.QR.options.value
+			commentField.value=postForm.QR.comment.value
+			lastCommentForm=commentField
+			removeChild(postForm.QR.form)
+			postForm.QR=0
 		}
 		return
 	}
 	var qr=query("#quickReply form:not(.greenPostForm)")
-	if(postFormQR||!qr){
+	if(postForm.QR||!qr){
 		return
 	}
-	postFormQR=element(
+	postForm.QR=element(
 		["form#form",{
 			name:"post",
 			action:serverurl+"post.php",
@@ -443,15 +468,20 @@ function showPostFormQR(hide){
 			]
 		]
 	)
-	qr.parentNode.insertBefore(postFormQR.form,qr)
+	addCommentForm(postForm.QR.comment)
+	insertBefore(postForm.QR.form,qr)
 }
 
 // 4chan-X QR
 function onQRXCreated(){
+	getUpdateLinks()
 	var qrPersona=query("#qr .persona")
 	if(!qrPersona){
 		return
 	}
+	var formSelector="#qr form:not(.greenPostForm)"
+	var commentField=query(formSelector+" textarea")
+	addCommentForm(commentField)
 	var toggle=element(
 		["button#toggle",{
 			type:"button",
@@ -464,7 +494,7 @@ function onQRXCreated(){
 			}
 		},"!"]
 	).toggle
-	qrPersona.insertBefore(toggle,qrPersona.firstChild)
+	insertBefore(toggle,qrPersona.firstChild)
 }
 
 function showPostFormQRX(hide){
@@ -473,20 +503,21 @@ function showPostFormQRX(hide){
 	var optionsField=query(formSelector+" input[name=email]")
 	var commentField=query(formSelector+" textarea")
 	if(hide){
-		if(postFormQRX){
-			nameField.value=postFormQRX.name.value
-			optionsField.value=postFormQRX.options.value
-			commentField.value=postFormQRX.comment.value
-			postFormQRX.form.parentNode.removeChild(postFormQRX.form)
-			postFormQRX=0
+		if(postForm.QRX){
+			nameField.value=postForm.QRX.name.value
+			optionsField.value=postForm.QRX.options.value
+			commentField.value=postForm.QRX.comment.value
+			lastCommentForm=commentField
+			removeChild(postForm.QRX.form)
+			postForm.QRX=0
 		}
 		return
 	}
-	var qrx=query("#qr>form")
-	if(postFormQRX||!qrx){
+	var qrx=query(formSelector)
+	if(postForm.QRX||!qrx){
 		return
 	}
-	postFormQRX=element(
+	postForm.QRX=element(
 		["form#form",{
 			name:"post",
 			action:serverurl+"post.php",
@@ -541,7 +572,8 @@ function showPostFormQRX(hide){
 			]
 		]
 	)
-	qrx.parentNode.insertBefore(postFormQRX.form,qrx)
+	addCommentForm(postForm.QRX.comment)
+	insertBefore(postForm.QRX.form,qrx)
 }
 
 // Disable 4chan-X threading when inserting posts
@@ -566,6 +598,44 @@ function threadingX(func){
 		menuButton.click()
 	}else{
 		func()
+	}
+}
+
+// Track last used comment field for inserting quotes
+function addCommentForm(commentField,notLast){
+	if(!notLast){
+		lastCommentForm=commentField
+	}
+	commentField.addEventListener("focus",event=>{
+		lastCommentForm=event.currentTarget
+	})
+}
+
+function insertQuote(event){
+	var commentField=lastCommentForm
+	if(commentField&&commentField.parentNode){
+		event.preventDefault()
+		event.stopPropagation()
+		var text=">>"+event.currentTarget.firstChild.data+"\n"
+		var caretPos=commentField.selectionStart
+		commentField.value=
+			commentField.value.slice(0,caretPos)
+			+text
+			+commentField.value.slice(commentField.selectionEnd)
+		var range=caretPos+text.length
+		commentField.setSelectionRange(range,range)
+		commentField.focus()
+	}
+}
+
+// Manually update thread with green posts
+function getUpdateLinks(){
+	var update=queryAll("[data-cmd=update],.updatelink>a")
+	for(var i=0;i<update.length;i++){
+		if(!updateLinks.has(update[i])){
+			update[i].addEventListener("click",getGreenPosts)
+			updateLinks.add(update[i])
+		}
 	}
 }
 
@@ -655,22 +725,33 @@ element(
 	},stylesheet]
 )
 
-function query(selector){
-	return document.querySelector(selector)
-}
-
 function padding(string,num){
 	return (""+string).padStart(num,0)
 }
 
+function query(selector){
+	return document.querySelector(selector)
+}
+
+function queryAll(selector){
+	return document.querySelectorAll(selector)
+}
+
+function insertBefore(newElement,targetElement){
+	targetElement.parentNode.insertBefore(newElement,targetElement)
+}
+
 function insertAfter(newElement,targetElement){
-	var parentNode=targetElement.parentNode
 	var nextSibling=targetElement.nextSibling
 	if(nextSibling){
-		parentNode.insertBefore(newElement,nextSibling)
+		insertBefore(newElement,nextSibling)
 	}else{
-		parentNode.appendChild(newElement)
+		targetElement.parentNode.appendChild(newElement)
 	}
+}
+
+function removeChild(targetElement){
+	targetElement.parentNode.removeChild(targetElement)
 }
 
 function element(){
