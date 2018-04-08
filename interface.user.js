@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name        [s4s] interface
 // @namespace   s4s4s4s4s4s4s4s4s4s
-// @version     2.0
+// @version     2.1
 // @author      le fun css man AKA Doctor Worse Than Hitler, kekero
 // @email       doctorworsethanhitler@gmail.com
 // @description Lets you view the greenposts.
@@ -92,15 +92,13 @@ function getGreenPosts(){
 					var postsObj=JSON.parse(response.responseText)
 					var postsCount=Object.keys(postsObj).length
 					if(postsCount){
-						threadingX(_=>{
-							var oldPosts=queryAll(".greenPostContainer")
-							for(var i=0;i<oldPosts.length;i++){
-								removeChild(oldPosts[i])
-							}
-							for(var i=0;i<postsCount;i++){
-								addPost(postsObj[i])
-							}
-						})
+						var oldPosts=queryAll(".greenPostContainer")
+						for(var i=0;i<oldPosts.length;i++){
+							removeChild(oldPosts[i])
+						}
+						for(var i=0;i<postsCount;i++){
+							addPost(postsObj[i])
+						}
 					}
 				})
 			}
@@ -210,7 +208,7 @@ function addPost(aPost){
 		]
 	).post
 	// Add the post
-	var afterPost=query("#pc"+aPost.after_no)
+	var afterPost=query(".thread>#pc"+aPost.after_no)
 	if(afterPost){
 		insertAfter(post,afterPost)
 	}else{
@@ -589,31 +587,6 @@ function showPostFormQRX(hide){
 	)
 	addCommentForm(postForm.QRX.comment)
 	insertBefore(postForm.QRX.form,qrx)
-}
-
-// Disable 4chan-X threading when inserting posts
-function threadingX(func){
-	if(
-		document.documentElement.classList.contains("fourchan-x","thread-view")
-		&&query(".threadContainer")
-	){
-		var menuButton=query("#shortcut-menu>.menu-button")
-		if(!menuButton){
-			return func()
-		}
-		menuButton.click()
-		var threadingCheckbox=query("#threadingControl")
-		if(!threadingCheckbox){
-			menuButton.click()
-			return func()
-		}
-		threadingCheckbox.click()
-		func()
-		threadingCheckbox.click()
-		menuButton.click()
-	}else{
-		func()
-	}
 }
 
 // Track last used comment field for inserting quotes
