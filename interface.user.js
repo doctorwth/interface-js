@@ -96,8 +96,9 @@ function getGreenPosts(){
 						for(var i=0;i<oldPosts.length;i++){
 							removeChild(oldPosts[i])
 						}
-						for(var i=0;i<postsCount;i++){
-							addPost(postsObj[i])
+						var currentPost
+						for(var i=postsCount;i--;){
+							currentPost=addPost(postsObj[i],currentPost)
 						}
 					}
 				})
@@ -109,7 +110,10 @@ function getGreenPosts(){
 }
 
 // Add a post to the proper position in the thread
-function addPost(aPost){
+function addPost(aPost,currentPost){
+	if(!currentPost){
+		currentPost=query(".thread>.postContainer")
+	}
 	var numberless=aPost.options=="numberless"
 	var afterNo=numberless?"XXXXXX":aPost.after_no
 	var postId=afterNo+"-"+aPost.id
@@ -208,22 +212,14 @@ function addPost(aPost){
 		]
 	).post
 	// Add the post
-	var afterPost=query(".thread>#pc"+aPost.after_no)
-	if(afterPost){
-		insertAfter(post,afterPost)
-	}else{
-		// Parent post is deleted
-		var currentPost=query(".thread>.postContainer:last-of-type")
-		while(1){
-			var prevPost=currentPost.previousSibling
-			if(!prevPost||prevPost.id.split("pc")[1]<aPost.after_no){
-				break
-			}
-			currentPost=prevPost
+	while(currentPost.nextSibling){
+		if(!/^pc\d+$/.test(currentPost.id)||currentPost.id.slice(2)<=aPost.after_no){
+			currentPost=currentPost.nextSibling
+		}else{
+			return insertBefore(post,currentPost)
 		}
-		insertBefore(post,currentPost)
 	}
-	return
+	return insertAfter(post,currentPost)
 }
 
 // Classic post form
@@ -830,20 +826,20 @@ function queryAll(selector){
 }
 
 function insertBefore(newElement,targetElement){
-	targetElement.parentNode.insertBefore(newElement,targetElement)
+	return targetElement.parentNode.insertBefore(newElement,targetElement)
 }
 
 function insertAfter(newElement,targetElement){
 	var nextSibling=targetElement.nextSibling
 	if(nextSibling){
-		insertBefore(newElement,nextSibling)
+		return insertBefore(newElement,nextSibling)
 	}else{
-		targetElement.parentNode.appendChild(newElement)
+		return targetElement.parentNode.appendChild(newElement)
 	}
 }
 
 function removeChild(targetElement){
-	targetElement.parentNode.removeChild(targetElement)
+	return targetElement.parentNode.removeChild(targetElement)
 }
 
 function element(){
