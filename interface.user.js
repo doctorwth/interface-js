@@ -378,6 +378,7 @@ function onQRCreated(){
 	}
 	var formSelector="#qrForm"
 	var nameField=query(formSelector+" input[name=name]")
+	nameField.value=query("#postForm input[name=name]").value
 	nameField.tabIndex=0
 	var commentField=query(formSelector+" textarea")
 	addCommentForm(commentField)
@@ -627,9 +628,13 @@ function addCommentForm(commentField,notLast){
 
 function insertQuote(event){
 	var commentField=lastCommentForm
-	if(commentField&&commentField.parentNode){
+	if(commentField&&document.contains(commentField)){
 		event.preventDefault()
 		event.stopPropagation()
+		var isQRX=commentField.closest("#qr")
+		if(isQRX){
+			isQRX.hidden=0
+		}
 		var text=">>"+event.currentTarget.firstChild.data+"\n"
 		var caretPos=commentField.selectionStart
 		commentField.value=
@@ -674,10 +679,10 @@ function submitGreenPost(event,form){
 	}
 	var data=[]
 	var formData=new FormData(form)
-	for(nameValue of formData){
+	for(var nameValue of formData){
 		data.push(
 			nameValue[0]+"="
-			+encodeURIComponent(nameValue[1].replace(/\r\n/g, "\r").replace(/\n/g, "\r"))
+			+encodeURIComponent(nameValue[1].replace(/\r?\n/g,"\r"))
 		)
 	}
 	data=data.join("&")
