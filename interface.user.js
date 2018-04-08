@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name        [s4s] interface
 // @namespace   s4s4s4s4s4s4s4s4s4s
-// @version     2.1
+// @version     2.0
 // @author      le fun css man AKA Doctor Worse Than Hitler, kekero
 // @email       doctorworsethanhitler@gmail.com
 // @description Lets you view the greenposts.
@@ -92,14 +92,15 @@ function getGreenPosts(){
 					var postsObj=JSON.parse(response.responseText)
 					var postsCount=Object.keys(postsObj).length
 					if(postsCount){
-						var oldPosts=queryAll(".greenPostContainer")
-						for(var i=0;i<oldPosts.length;i++){
-							removeChild(oldPosts[i])
-						}
-						var currentPost
-						for(var i=postsCount;i--;){
-							currentPost=addPost(postsObj[i],currentPost)
-						}
+						threadingX(_=>{
+							var oldPosts=queryAll(".greenPostContainer")
+							for(var i=0;i<oldPosts.length;i++){
+								removeChild(oldPosts[i])
+							}
+							for(var i=0;i<postsCount;i++){
+								addPost(postsObj[i])
+							}
+						})
 					}
 				})
 			}
@@ -110,10 +111,7 @@ function getGreenPosts(){
 }
 
 // Add a post to the proper position in the thread
-function addPost(aPost,currentPost){
-	if(!currentPost){
-		currentPost=query(".thread>.postContainer")
-	}
+function addPost(aPost){
 	var numberless=aPost.options=="numberless"
 	var afterNo=numberless?"XXXXXX":aPost.after_no
 	var postId=afterNo+"-"+aPost.id
@@ -144,7 +142,7 @@ function addPost(aPost,currentPost){
 	var post=element(
 		["div#post",{
 			class:"postContainer replyContainer greenPostContainer",
-			id:"pc"+postId
+			id:"pc"+aPost.after_no
 		},
 			["div",{
 				class:"sideArrows",
@@ -212,14 +210,22 @@ function addPost(aPost,currentPost){
 		]
 	).post
 	// Add the post
-	while(currentPost.nextSibling){
-		if(!/^pc\d+$/.test(currentPost.id)||currentPost.id.slice(2)<=aPost.after_no){
-			currentPost=currentPost.nextSibling
-		}else{
-			return insertBefore(post,currentPost)
+	var afterPost=query("#pc"+aPost.after_no)
+	if(afterPost){
+		insertAfter(post,afterPost)
+	}else{
+		// Parent post is deleted
+		var currentPost=query(".thread>.postContainer:last-of-type")
+		while(1){
+			var prevPost=currentPost.previousSibling
+			if(!prevPost||prevPost.id.split("pc")[1]<aPost.after_no){
+				break
+			}
+			currentPost=prevPost
 		}
+		insertBefore(post,currentPost)
 	}
-	return insertAfter(post,currentPost)
+	return
 }
 
 // Classic post form
@@ -372,7 +378,6 @@ function onQRCreated(){
 	}
 	var formSelector="#qrForm"
 	var nameField=query(formSelector+" input[name=name]")
-	nameField.value=query("#postForm input[name=name]").value
 	nameField.tabIndex=0
 	var commentField=query(formSelector+" textarea")
 	addCommentForm(commentField)
@@ -585,6 +590,31 @@ function showPostFormQRX(hide){
 	insertBefore(postForm.QRX.form,qrx)
 }
 
+// Disable 4chan-X threading when inserting posts
+function threadingX(func){
+	if(
+		document.documentElement.classList.contains("fourchan-x","thread-view")
+		&&query(".threadContainer")
+	){
+		var menuButton=query("#shortcut-menu>.menu-button")
+		if(!menuButton){
+			return func()
+		}
+		menuButton.click()
+		var threadingCheckbox=query("#threadingControl")
+		if(!threadingCheckbox){
+			menuButton.click()
+			return func()
+		}
+		threadingCheckbox.click()
+		func()
+		threadingCheckbox.click()
+		menuButton.click()
+	}else{
+		func()
+	}
+}
+
 // Track last used comment field for inserting quotes
 function addCommentForm(commentField,notLast){
 	if(!notLast){
@@ -597,13 +627,9 @@ function addCommentForm(commentField,notLast){
 
 function insertQuote(event){
 	var commentField=lastCommentForm
-	if(commentField&&document.contains(commentField)){
+	if(commentField&&commentField.parentNode){
 		event.preventDefault()
 		event.stopPropagation()
-		var isQRX=commentField.closest("#qr")
-		if(isQRX){
-			isQRX.hidden=0
-		}
 		var text=">>"+event.currentTarget.firstChild.data+"\n"
 		var caretPos=commentField.selectionStart
 		commentField.value=
@@ -648,10 +674,10 @@ function submitGreenPost(event,form){
 	}
 	var data=[]
 	var formData=new FormData(form)
-	for(var nameValue of formData){
+	for(nameValue of formData){
 		data.push(
 			nameValue[0]+"="
-			+encodeURIComponent(nameValue[1].replace(/\r?\n/g,"\r"))
+			+encodeURIComponent(nameValue[1].replace(/\r\n/g, "\r").replace(/\n/g, "\r"))
 		)
 	}
 	data=data.join("&")
@@ -826,20 +852,20 @@ function queryAll(selector){
 }
 
 function insertBefore(newElement,targetElement){
-	return targetElement.parentNode.insertBefore(newElement,targetElement)
+	targetElement.parentNode.insertBefore(newElement,targetElement)
 }
 
 function insertAfter(newElement,targetElement){
 	var nextSibling=targetElement.nextSibling
 	if(nextSibling){
-		return insertBefore(newElement,nextSibling)
+		insertBefore(newElement,nextSibling)
 	}else{
-		return targetElement.parentNode.appendChild(newElement)
+		targetElement.parentNode.appendChild(newElement)
 	}
 }
 
 function removeChild(targetElement){
-	return targetElement.parentNode.removeChild(targetElement)
+	targetElement.parentNode.removeChild(targetElement)
 }
 
 function element(){
