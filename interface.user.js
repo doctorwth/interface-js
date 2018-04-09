@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name        [s4s] interface
 // @namespace   s4s4s4s4s4s4s4s4s4s
-// @version     2.1
+// @version     2.2
 // @author      le fun css man AKA Doctor Worse Than Hitler, kekero
 // @email       doctorworsethanhitler@gmail.com
 // @description Lets you view the greenposts.
@@ -212,14 +212,15 @@ function addPost(aPost,currentPost){
 		]
 	).post
 	// Add the post
-	while(currentPost.nextSibling){
+	while(currentPost){
+		var lastPost=currentPost
 		if(!/^pc\d+$/.test(currentPost.id)||currentPost.id.slice(2)<=aPost.after_no){
 			currentPost=currentPost.nextSibling
 		}else{
 			return insertBefore(post,currentPost)
 		}
 	}
-	return insertAfter(post,currentPost)
+	return insertAfter(post,lastPost)
 }
 
 // Classic post form
@@ -366,10 +367,7 @@ function onQRCreated(){
 	if(oldToggle){
 		removeChild(oldToggle)
 	}
-	var oldPostForm=query("#quickReply form:not(.greenPostForm)")
-	if(oldPostForm){
-		showPostFormQR(1)
-	}
+	showPostFormQR(1)
 	var formSelector="#qrForm"
 	var nameField=query(formSelector+" input[name=name]")
 	nameField.value=query("#postForm input[name=name]").value
