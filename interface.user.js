@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name        [s4s] interface
 // @namespace   s4s4s4s4s4s4s4s4s4s
-// @version     3.0
+// @version     3.1
 // @author      le fun css man AKA Doctor Worse Than Hitler, kekero
 // @email       doctorworsethanhitler@gmail.com
 // @description Lets you view the greenposts.
@@ -14,6 +14,7 @@
 // @grant       unsafeWindow
 // @icon data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHBhdGggZD0iTTAgMEgxNlYxNkgwIiBmaWxsPSIjZGZkIi8+PHBhdGggZD0iTTMgNCA2IDFoNGwzIDN2OGwtMyAzSDZMMyAxMiIgZmlsbD0iZ3JlZW4iLz48cGF0aCBkPSJtNS41IDExLjVoLTJ2LTdoMnYtM2MtMyAwLTUgMi41LTUgNi41IDAgNCAyIDYuNSA1IDYuNXptNSAzYzMgMCA1LTIuNSA1LTYuNSAwLTQtMi02LjUtNS02LjV2M2gydjdoLTJ6bS00LTRoM0wxMCAyLjVINlptMCAzaDN2LTNoLTN6IiBmaWxsPSIjZmZmIiBzdHJva2U9ImdyZWVuIi8+PC9zdmc+
 // ==/UserScript==
+"use strict";
 
 if(query("#s4sinterface-css")){
 	throw "Multiple instances of [s4s] interface detected"
@@ -26,7 +27,7 @@ var updateLinks=new Set()
 var cacheCatalogPosts={}
 var is4chanX=0
 var mode=""
-var threadMeta
+var threadId
 var pathName=location.pathname
 var threadMatch=pathName.match(/\/thread\/(\d+)/)
 if(threadMatch){
@@ -53,35 +54,37 @@ if(mode=="thread"){
 	getGreenPosts(threadId)
 }else if(mode=="catalog"){
 	onPageLoad(_=>{
-    getGreenPostsCatalog()
+		getGreenPostsCatalog()
 	})
 }
 
 onPageLoad(_=>{
 	// Classic post form
-	var nameField=query("#postForm input[name=name]")
-	if(nameField){
-		var commentField=query("#postForm textarea")
-		addCommentForm(commentField,1)
-		var greenToggle=element(
-			["button#toggle",{
-				class:"greenToggle",
-				title:"[s4s] Interface",
-				onclick:event=>{
-					event.preventDefault()
-					event.stopPropagation()
-					showPostFormClassic()
-				}
-			},"!"]
-		).toggle
-		var nameParent=nameField.parentNode
-		nameParent.classList.add("nameFieldParent")
-		insertBefore(greenToggle,nameField)
-	}else{
-		// Thread is archived
-		showPostFormClassic()
+	if(mode=="thread"){
+		var nameField=query("#postForm input[name=name]")
+		if(nameField){
+			var commentField=query("#postForm textarea")
+			addCommentForm(commentField,1)
+			var greenToggle=element(
+				["button#toggle",{
+					class:"greenToggle",
+					title:"[s4s] Interface",
+					onclick:event=>{
+						event.preventDefault()
+						event.stopPropagation()
+						showPostFormClassic()
+					}
+				},"!"]
+			).toggle
+			var nameParent=nameField.parentNode
+			nameParent.classList.add("nameFieldParent")
+			insertBefore(greenToggle,nameField)
+		}else{
+			// Thread is archived
+			showPostFormClassic()
+		}
+		getUpdateLinks()
 	}
-	getUpdateLinks()
 })
 
 // Native extension QR
@@ -264,12 +267,13 @@ function getGreenPostsCatalog(){
 			return setTimeout(getGreenPostsCatalog,500)
 		}
 	}
-
 	var threads=[]
 	var catalogThreads=threadContainer.children
-	for(var i=0;i<catalogThreads.length-1;i++){
-		var id=catalogThreads[i].id.match(/\d+/)[0]
-		threads.push(id)
+	for(var i=0;i<catalogThreads.length;i++){
+		var idMatch=catalogThreads[i].id.match(/\d+/)
+		if(idMatch){
+			threads.push(idMatch[0])
+		}
 	}
 	GM.xmlHttpRequest({
 		method:"post",
@@ -303,6 +307,7 @@ function showGreenPostsCatalog(){
 		removeChild(oldPosts[i].previousSibling)
 		removeChild(oldPosts[i])
 	}
+	var threadMeta
 	for(var thread in countObj){
 		if(mode=="catalog"){
 			threadMeta=document.getElementById("meta-"+thread)
@@ -446,7 +451,7 @@ function showPostFormClassic(hide){
 		]
 	)
 	addCommentForm(postForm.classic.comment)
-	originalForm=query("#postForm")
+	var originalForm=query("#postForm")
 	if(originalForm){
 		originalForm=originalForm.parentNode
 	}else{
@@ -460,13 +465,15 @@ function showPostFormClassic(hide){
 
 // Native extension initialised
 function onNativeextInit(){
-	if(mode=="thread"){
+	if(mode=="thread"||mode=="index"){
 		getUpdateLinks()
 		// Native extension quick reply
 		unsafeWindow.QR.showInterface=unsafeWindow.QR.show
-		var newQRshow=function(){
-			var event=document.createEvent("Event")
-			event.initEvent("QRNativeDialogCreation",false,false)
+		var newQRshow=thread=>{
+			var event=new CustomEvent("QRNativeDialogCreation",{
+				bubbles:true,
+				detail:{thread:thread}
+			})
 			document.dispatchEvent(event)
 		}
 		if(typeof exportFunction=="function"){
@@ -476,15 +483,8 @@ function onNativeextInit(){
 	}
 }
 
-// 4chan X initialised
-function on4chanXInit(){
-	is4chanX=1
-	if(mode=="index"&&document.documentElement.classList.contains("catalog-mode")){
-		getGreenPostsCatalog()
-	}
-}
-
-function onQRCreated(){
+function onQRCreated(event){
+	threadId=event.detail.thread
 	try{
 		unsafeWindow.QR.showInterface(threadId)
 	}catch(e){}
@@ -604,13 +604,17 @@ function showPostFormQR(hide){
 	insertBefore(postForm.QR.form,qr)
 }
 
+// 4chan-X initialised
+function on4chanXInit(){
+	is4chanX=1
+	if(mode=="index"&&document.documentElement.classList.contains("catalog-mode")){
+		getGreenPostsCatalog()
+	}
+}
+
 // 4chan-X QR
 function onQRXCreated(){
 	getUpdateLinks()
-	var qrPersona=query("#qr .persona")
-	if(!qrPersona){
-		return
-	}
 	var formSelector="#qr form:not(.greenPostForm)"
 	var commentField=query(formSelector+" textarea")
 	addCommentForm(commentField)
@@ -626,6 +630,7 @@ function onQRXCreated(){
 			}
 		},"!"]
 	).toggle
+	var qrPersona=query("#qr .persona")
 	insertBefore(toggle,qrPersona.firstChild)
 }
 
@@ -649,6 +654,7 @@ function showPostFormQRX(hide){
 	if(postForm.QRX||!qrx){
 		return
 	}
+	threadId=query("#qr select[data-name=thread]").value
 	postForm.QRX=element(
 		["form#form",{
 			name:"post",
@@ -792,7 +798,11 @@ function submitGreenPost(event,form){
 			if(response.status==200){
 				if(/Post Successful/.test(response.responseText)){
 					form.getElementsByTagName("textarea")[0].value=""
-					getGreenPosts(threadId)
+					if(mode=="thread"){
+						getGreenPosts(threadId)
+					}else{
+						alert("Post successful")
+					}
 				}else{
 					return postSubmitted(submit,response.status,response.responseText)
 				}
@@ -830,7 +840,8 @@ function postSubmitted(submit,errorCode,responseText){
 var stylesheet=`
 .greenPostForm+form .postForm>tbody>tr:not(.rules),
 #quickReply .greenPostForm+form,
-#qr .greenPostForm+form{
+#qr .greenPostForm+form,
+#qr:not(.reply-to-thread) .greenToggle:not(.pressed){
 	display:none!important;
 }
 .greenPostForm .file-n-submit{
