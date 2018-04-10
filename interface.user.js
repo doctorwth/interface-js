@@ -170,15 +170,30 @@ function addPost(aPost,currentPost){
 			},postId]
 		]
 	}
+	var replyHideX=document.documentElement.classList.contains("reply-hide")
 	var post=element(
 		["div#post",{
 			class:"postContainer replyContainer greenPostContainer",
 			id:"pc"+aPost.after_no
 		},
-			["div",{
-				class:"sideArrows",
-				id:"sa"+postId
-			},">>"],
+			(replyHideX?
+				["div",{
+					id:"sa"+postId
+				},
+					["a",{
+						class:"hide-reply-button"
+					},
+						["span",{
+							class:"fa fa-minus-square-o"
+						}]
+					]
+				]
+			:
+				["div",{
+					class:"sideArrows",
+					id:"sa"+postId
+				},">>"]
+			),
 			["div",{
 				class:"post reply",
 				id:"p"+postId
@@ -255,15 +270,15 @@ function addPost(aPost,currentPost){
 // Get green post count on catalog
 function getGreenPostsCatalog(){
 	var threadContainer=query(".is_catalog #threads,.catalog-mode .board")
-	if(!threadContainer||!threadContainer.children){
+	if(!threadContainer||!threadContainer.children.length){
 		if(mode=="catalog"){
 			return setTimeout(getGreenPostsCatalog,500)
 		}else{
-			var listener=event=>{
-				document.removeEventListener("PostsInserted",listener)
+			var insertListener=event=>{
+				document.removeEventListener("PostsInserted",insertListener)
 				getGreenPostsCatalog()
 			}
-			return document.addEventListener("PostsInserted",listener)
+			return document.addEventListener("PostsInserted",insertListener)
 		}
 	}
 	var threads=[]
@@ -929,6 +944,10 @@ var stylesheet=`
 }
 .greenPostCount{
 	color:#060;
+}
+.greenPostContainer .hide-reply-button{
+	opacity:0!important;
+	pointer-events:none;
 }
 @media only screen and (max-width:480px){
 	.postForm .greenToggle+input{
