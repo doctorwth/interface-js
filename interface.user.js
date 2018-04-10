@@ -148,8 +148,8 @@ function addPost(aPost,currentPost){
 	var postId=afterNo+"-"+aPost.id
 	var date=new Date(aPost.timestamp*1000)
 	var dateString=
-		padding(date.getDate(),2)+"/"+
 		padding(date.getMonth()+1,2)+"/"+
+		padding(date.getDate(),2)+"/"+
 		(""+date.getFullYear()).slice(-2)+
 		"("+weekdays[date.getDay()]+")"+
 		padding(date.getHours(),2)+":"+
