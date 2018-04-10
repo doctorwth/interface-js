@@ -1,12 +1,12 @@
 ﻿// ==UserScript==
 // @name        [s4s] interface
 // @namespace   s4s4s4s4s4s4s4s4s4s
-// @version     2.2
+// @version     3.0
 // @author      le fun css man AKA Doctor Worse Than Hitler, kekero
 // @email       doctorworsethanhitler@gmail.com
 // @description Lets you view the greenposts.
-// @match       https://boards.4chan.org/s4s/thread/*
-// @match       http://boards.4chan.org/s4s/thread/*
+// @match       https://boards.4chan.org/s4s/*
+// @match       http://boards.4chan.org/s4s/*
 // @connect     funposting.online
 // @run-at      document-start
 // @grant       GM_xmlhttpRequest
@@ -19,11 +19,27 @@ if(query("#s4sinterface-css")){
 	throw "Multiple instances of [s4s] interface detected"
 }
 
-var threadId=location.pathname.match(/\/thread\/(\d+)/)[1]
 var weekdays=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
 var postForm={}
 var lastCommentForm
 var updateLinks=new Set()
+var cacheCatalogPosts={}
+var is4chanX=0
+var mode=""
+var threadMeta
+var pathName=location.pathname
+var threadMatch=pathName.match(/\/thread\/(\d+)/)
+if(threadMatch){
+	// /board/thread/1
+	mode="thread"
+	threadId=threadMatch[1]
+}else if(/\/catalog$/.test(pathName)){
+	// /board/catalog
+	mode="catalog"
+}else if(/^\/[^\/]+\/\d*$/.test(pathName)){
+	// /board/
+	mode="index"
+}
 
 if(typeof GM=="undefined"){
 	window.GM={
@@ -33,7 +49,13 @@ if(typeof GM=="undefined"){
 
 // Request green posts
 var serverurl="https://funposting.online/interface/"
-getGreenPosts()
+if(mode=="thread"){
+	getGreenPosts(threadId)
+}else if(mode=="catalog"){
+	onPageLoad(_=>{
+    getGreenPostsCatalog()
+	})
+}
 
 onPageLoad(_=>{
 	// Classic post form
@@ -71,6 +93,11 @@ if(unsafeWindow.Main){
 }
 
 // 4chan-X QR integration
+if(document.documentElement.classList.contains("fourchan-x")){
+	on4chanXInit()
+}else{
+	document.addEventListener("4chanXInitFinished",on4chanXInit)
+}
 document.addEventListener("QRDialogCreation",onQRXCreated)
 
 function onPageLoad(func){
@@ -82,10 +109,10 @@ function onPageLoad(func){
 }
 
 // Request green posts
-function getGreenPosts(){
+function getGreenPosts(thread){
 	GM.xmlHttpRequest({
 		method:"get",
-		url:serverurl+"get.php?thread="+threadId,
+		url:serverurl+"get.php?thread="+thread,
 		onload:response=>{
 			if(response.status==200){
 				onPageLoad(_=>{
@@ -223,6 +250,94 @@ function addPost(aPost,currentPost){
 	return insertAfter(post,lastPost)
 }
 
+// Get green post count on catalog
+function getGreenPostsCatalog(){
+	var threadContainer=query(".is_catalog #threads,.catalog-mode .board")
+	if(!threadContainer||!threadContainer.children){
+		if(is4chanX){
+			var listener=event=>{
+				document.removeEventListener("PostsInserted",listener)
+				getGreenPostsCatalog()
+			}
+			return document.addEventListener("PostsInserted",listener)
+		}else{
+			return setTimeout(getGreenPostsCatalog,500)
+		}
+	}
+
+	var threads=[]
+	var catalogThreads=threadContainer.children
+	for(var i=0;i<catalogThreads.length-1;i++){
+		var id=catalogThreads[i].id.match(/\d+/)[0]
+		threads.push(id)
+	}
+	GM.xmlHttpRequest({
+		method:"post",
+		headers:{
+			"Content-type":"application/x-www-form-urlencoded"
+		},
+		url:serverurl+"get.php?mode=catalog",
+		data:"thread="+threads.join(","),
+		onload:response=>{
+			if(response.status==200){
+				cacheCatalogPosts=JSON.parse(response.responseText)
+				showGreenPostsCatalog()
+				if(is4chanX){
+					document.addEventListener("PostsInserted",showGreenPostsCatalog)
+				}else{
+					new MutationObserver(mutations=>{
+						showGreenPostsCatalog()
+					}).observe(threadContainer,{childList:1})
+				}
+			}
+		},
+		onerror:response=>{
+		}
+	})
+}
+
+function showGreenPostsCatalog(){
+	var countObj=cacheCatalogPosts
+	var oldPosts=queryAll(".greenPostCount")
+	for(var i=0;i<oldPosts.length;i++){
+		removeChild(oldPosts[i].previousSibling)
+		removeChild(oldPosts[i])
+	}
+	for(var thread in countObj){
+		if(mode=="catalog"){
+			threadMeta=document.getElementById("meta-"+thread)
+		}else{
+			threadMeta=query("#p"+thread+">.catalog-stats>span")
+		}
+		if(threadMeta){
+			addCatalogPosts(countObj[thread],threadMeta)
+		}
+	}
+}
+
+function addCatalogPosts(count,threadMeta){
+	if(count){
+		var nativeCatalog=1
+		if(is4chanX){
+			nativeCatalog=0
+		}
+		var text=document.createTextNode(" / ")
+		var postCount=element(
+			["span#span",{
+				class:"greenPostCount"
+			},
+				(nativeCatalog&&
+					"G: "
+				),
+				["b",count]
+			]
+		).span
+		var afterNode=threadMeta.childNodes[nativeCatalog]
+		insertAfter(text,afterNode)
+		insertAfter(postCount,text)
+	}
+}
+
 // Classic post form
 function showPostFormClassic(hide){
 	var formSelector="body>form:not(.greenPostForm)"
@@ -343,19 +458,30 @@ function showPostFormClassic(hide){
 	insertBefore(postForm.classic.form,originalForm)
 }
 
-// Native extension quick reply
+// Native extension initialised
 function onNativeextInit(){
-	getUpdateLinks()
-	unsafeWindow.QR.showInterface=unsafeWindow.QR.show
-	var newQRshow=function(){
-		var event=document.createEvent("Event")
-		event.initEvent("QRNativeDialogCreation",false,false)
-		document.dispatchEvent(event)
+	if(mode=="thread"){
+		getUpdateLinks()
+		// Native extension quick reply
+		unsafeWindow.QR.showInterface=unsafeWindow.QR.show
+		var newQRshow=function(){
+			var event=document.createEvent("Event")
+			event.initEvent("QRNativeDialogCreation",false,false)
+			document.dispatchEvent(event)
+		}
+		if(typeof exportFunction=="function"){
+			newQRshow=exportFunction(newQRshow,document.defaultView)
+		}
+		unsafeWindow.QR.show=newQRshow
 	}
-	if(typeof exportFunction=="function"){
-		newQRshow=exportFunction(newQRshow,document.defaultView)
+}
+
+// 4chan X initialised
+function on4chanXInit(){
+	is4chanX=1
+	if(mode=="index"&&document.documentElement.classList.contains("catalog-mode")){
+		getGreenPostsCatalog()
 	}
-	unsafeWindow.QR.show=newQRshow
 }
 
 function onQRCreated(){
@@ -619,7 +745,9 @@ function getUpdateLinks(){
 	var update=queryAll("[data-cmd=update],.updatelink>a")
 	for(var i=0;i<update.length;i++){
 		if(!updateLinks.has(update[i])){
-			update[i].addEventListener("click",getGreenPosts)
+			update[i].addEventListener("click",event=>{
+				getGreenPosts(threadId)
+			})
 			updateLinks.add(update[i])
 		}
 	}
@@ -664,7 +792,7 @@ function submitGreenPost(event,form){
 			if(response.status==200){
 				if(/Post Successful/.test(response.responseText)){
 					form.getElementsByTagName("textarea")[0].value=""
-					getGreenPosts()
+					getGreenPosts(threadId)
 				}else{
 					return postSubmitted(submit,response.status,response.responseText)
 				}
@@ -789,6 +917,9 @@ var stylesheet=`
 .greenSubmitDisabled{
 	color:#808080;
 	pointer-events:none;
+}
+.greenPostCount{
+	color:#060;
 }
 @media only screen and (max-width:480px){
 	.postForm .greenToggle+input{
