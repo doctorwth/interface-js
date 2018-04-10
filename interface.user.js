@@ -269,8 +269,7 @@ function getGreenPostsCatalog(){
 		var id=catalogThreads[i].id.match(/\d+/)[0]
 		threads.push(id)
 	}
-	//GM.xmlHttpRequest
-	tempCatalog({
+	GM.xmlHttpRequest({
 		method:"post",
 		headers:{
 			"Content-type":"application/x-www-form-urlencoded"
@@ -292,23 +291,6 @@ function getGreenPostsCatalog(){
 		},
 		onerror:response=>{
 		}
-	})
-}
-
-// Temporary function, generates random numbers instead of real posts
-function tempCatalog(input){
-	var threads=input.data.slice(7).split(",")
-	var output={}
-	for(var i=0;i<threads.length;i++){
-		var count=Math.floor(Math.random()*50-25)
-		if(count<0){
-			count=0
-		}
-		output[threads[i]]=count
-	}
-	input.onload({
-		status:200,
-		responseText:JSON.stringify(output)
 	})
 }
 
