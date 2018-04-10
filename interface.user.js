@@ -25,7 +25,6 @@ var postForm={}
 var lastCommentForm
 var updateLinks=new Set()
 var cacheCatalogPosts={}
-var is4chanX=0
 var mode=""
 var threadId
 var pathName=location.pathname
@@ -236,7 +235,7 @@ function addPost(aPost,currentPost){
 				["blockquote",{
 					class:"postMessage",
 					id:"m"+postId,
-					innerHTML:aPost.text.replace(/\r/g,'')
+					innerHTML:aPost.text.replace(/\r/g,"")
 				}]
 			]
 		]
@@ -257,14 +256,14 @@ function addPost(aPost,currentPost){
 function getGreenPostsCatalog(){
 	var threadContainer=query(".is_catalog #threads,.catalog-mode .board")
 	if(!threadContainer||!threadContainer.children){
-		if(is4chanX){
+		if(mode=="catalog"){
+			return setTimeout(getGreenPostsCatalog,500)
+		}else{
 			var listener=event=>{
 				document.removeEventListener("PostsInserted",listener)
 				getGreenPostsCatalog()
 			}
 			return document.addEventListener("PostsInserted",listener)
-		}else{
-			return setTimeout(getGreenPostsCatalog,500)
 		}
 	}
 	var threads=[]
@@ -286,12 +285,12 @@ function getGreenPostsCatalog(){
 			if(response.status==200){
 				cacheCatalogPosts=JSON.parse(response.responseText)
 				showGreenPostsCatalog()
-				if(is4chanX){
-					document.addEventListener("PostsInserted",showGreenPostsCatalog)
-				}else{
+				if(mode=="catalog"){
 					new MutationObserver(mutations=>{
 						showGreenPostsCatalog()
 					}).observe(threadContainer,{childList:1})
+				}else{
+					document.addEventListener("PostsInserted",showGreenPostsCatalog)
 				}
 			}
 		},
@@ -322,9 +321,9 @@ function showGreenPostsCatalog(){
 
 function addCatalogPosts(count,threadMeta){
 	if(count){
-		var nativeCatalog=1
-		if(is4chanX){
-			nativeCatalog=0
+		var nativeCatalog=0
+		if(mode=="catalog"){
+			nativeCatalog=1
 		}
 		var text=document.createTextNode(" / ")
 		var postCount=element(
@@ -606,7 +605,6 @@ function showPostFormQR(hide){
 
 // 4chan-X initialised
 function on4chanXInit(){
-	is4chanX=1
 	if(mode=="index"&&document.documentElement.classList.contains("catalog-mode")){
 		getGreenPostsCatalog()
 	}
