@@ -26,6 +26,7 @@ var updateLinks=new Set()
 var cacheCatalogPosts={}
 var is4chanX=0
 var mode=""
+var threadMeta
 var pathName=location.pathname
 var threadMatch=pathName.match(/\/thread\/(\d+)/)
 if(threadMatch){
@@ -52,7 +53,7 @@ if(mode=="thread"){
 	getGreenPosts(threadId)
 }else if(mode=="catalog"){
 	onPageLoad(_=>{
-		getGreenPostsCatalog()
+    getGreenPostsCatalog()
 	})
 }
 
@@ -263,14 +264,15 @@ function getGreenPostsCatalog(){
 			return setTimeout(getGreenPostsCatalog,500)
 		}
 	}
+
 	var threads=[]
 	var catalogThreads=threadContainer.children
-	for(var i=0;i<catalogThreads.length;i++){
+	for(var i=0;i<catalogThreads.length-1;i++){
 		var id=catalogThreads[i].id.match(/\d+/)[0]
 		threads.push(id)
 	}
-	//GM.xmlHttpRequest
-	tempCatalog({
+
+  GM.xmlHttpRequest({
 		method:"post",
 		headers:{
 			"Content-type":"application/x-www-form-urlencoded"
@@ -321,9 +323,9 @@ function showGreenPostsCatalog(){
 	}
 	for(var thread in countObj){
 		if(mode=="catalog"){
-			var threadMeta=document.getElementById("meta-"+thread)
+			threadMeta=document.getElementById("meta-"+thread)
 		}else{
-			var threadMeta=query("#p"+thread+">.catalog-stats>span")
+			threadMeta=query("#p"+thread+">.catalog-stats>span")
 		}
 		if(threadMeta){
 			addCatalogPosts(countObj[thread],threadMeta)
