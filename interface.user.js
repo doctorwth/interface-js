@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name        [s4s] interface
 // @namespace   s4s4s4s4s4s4s4s4s4s
-// @version     3.1
+// @version     3.2
 // @author      le fun css man AKA Doctor Worse Than Hitler, kekero
 // @email       doctorworsethanhitler@gmail.com
 // @description Lets you view the greenposts.
@@ -20,6 +20,7 @@ if(query("#s4sinterface-css")){
 	throw "Multiple instances of [s4s] interface detected"
 }
 
+var interfaceLinkRegex = new RegExp('<a[^>]*>&gt;&gt;\\d*( \\(.*\\))?<\\/a>(<span>)?-\\d*');
 var weekdays=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
 var postForm={}
 var lastCommentForm
@@ -49,12 +50,30 @@ if(typeof GM=="undefined"){
 
 // Request green posts
 var serverurl="https://funposting.online/interface/"
+
 if(mode=="thread"){
 	getGreenPosts(threadId)
 }else if(mode=="catalog"){
 	onPageLoad(_=>{
 		getGreenPostsCatalog()
 	})
+}else if(mode=="index") {
+  onPageLoad(_=>{
+		addGreenPostsToIndex()
+	})
+  
+}
+
+function addGreenPostsToIndex() {
+  var threads = document.getElementsByClassName("thread")
+  for (var i = 0; i < threads.length; i++) {
+    var responses = threads[i].getElementsByClassName("replyContainer")
+    var since = 0
+    if(responses != null && responses.length > 0) {
+    	var since = threads[i].getElementsByClassName("replyContainer")[0].id.substr(2)
+    }
+    getGreenPosts(threads[i].id.substr(1), since)
+  }
 }
 
 onPageLoad(_=>{
@@ -109,26 +128,45 @@ function onPageLoad(func){
 		func()
 	}
 }
+// replaces links like >>1234567-123 in native 4chan posts with an appropriate link back to the interface post.
+function replaceInterfaceLinks(post) {
+    while(interfaceLinkRegex.test(post.innerHTML)) {
+    var link = interfaceLinkRegex.exec(post.innerHTML)[0] //something like <a href="#p6696342" class="quotelink ql-tracked">&gt;&gt;6696342 (You)</a>-6754<br>test pls ignorlol
+    var link_afterno = /&gt;\d+/.exec(link)[0].substr(4)
+    var link_interfaceno = /-\d+/.exec(link)[0].substr(1)
+    var has_span = /<span>/.test(link) // sometimes the end of the link starts with a <span> so lets not forget it later
+    var replace = '<a class="quotelink" href="#p'+link_afterno+'-'+link_interfaceno+'">&gt;&gt;'+link_afterno+'-'+link_interfaceno+'</a>'
+    if(has_span) replace += '<span>'
+  	post.innerHTML = post.innerHTML.replace(interfaceLinkRegex, replace)
+  }
+}
 
-// Request green posts
-function getGreenPosts(thread){
+// Request green posts & add them
+function getGreenPosts(thread, since = 0){
 	GM.xmlHttpRequest({
 		method:"get",
-		url:serverurl+"get.php?thread="+thread,
+		url:serverurl+"get.php?thread="+thread+((since != 0) ? "since="+since : ""),
 		onload:response=>{
 			if(response.status==200){
 				onPageLoad(_=>{
 					var postsObj=JSON.parse(response.responseText)
 					var postsCount=Object.keys(postsObj).length
 					if(postsCount){
-						var oldPosts=queryAll(".greenPostContainer")
-						for(var i=0;i<oldPosts.length;i++){
-							removeChild(oldPosts[i])
-						}
-						var currentPost
-						for(var i=postsCount;i--;){
-							currentPost=addPost(postsObj[i],currentPost)
-						}
+            if(mode == "thread") {
+              var oldPosts=queryAll(".greenPostContainer")
+              for(var i=0;i<oldPosts.length;i++){
+                removeChild(oldPosts[i])
+              }
+              var currentPost
+              for(var i=postsCount;i--;){
+                currentPost=addPost(postsObj[i],currentPost)
+              }
+            }
+            else if(mode == "index") {
+              for(var i=0; i< postsCount; i++){
+                addPost(postsObj[i],document.getElementById(postsObj[i].after_no))
+              }
+            }
 					}
 				})
 			}
@@ -138,12 +176,9 @@ function getGreenPosts(thread){
 	})
 }
 
-// Add a post to the proper position in the thread
-function addPost(aPost,currentPost){
-	if(!currentPost){
-		currentPost=query(".thread>.postContainer")
-	}
-	var numberless=aPost.options=="numberless"
+// takes the JSON from the server and converts to an HTML element
+function postJsonToElement(aPost){
+  var numberless=aPost.options=="numberless"
 	var afterNo=numberless?"XXXXXX":aPost.after_no
 	var postId=afterNo+"-"+aPost.id
 	var date=new Date(aPost.timestamp*1000)
@@ -255,17 +290,34 @@ function addPost(aPost,currentPost){
 			]
 		]
 	).post
-	// Add the post
-	while(currentPost){
-		var lastPost=currentPost
-		if(!/^pc\d+$/.test(currentPost.id)||currentPost.id.slice(2)<=aPost.after_no){
-			currentPost=currentPost.nextSibling
-		}else{
-			return insertBefore(post,currentPost)
-		}
-	}
-	return insertAfter(post,lastPost)
+  return post
 }
+
+// Add a post to the proper position in the thread
+function addPost(aPost,currentPost){
+	if(!currentPost){
+		currentPost=query(".thread>.postContainer")
+	}
+  
+	var post=postJsonToElement(aPost)
+  
+  if(mode == "thread") {
+    // Add the post
+    while(currentPost){
+      var lastPost=currentPost
+      if(!/^pc\d+$/.test(currentPost.id)||currentPost.id.slice(2)<=aPost.after_no){
+        currentPost=currentPost.nextSibling
+      }else{
+        return insertBefore(post,currentPost)
+      }
+    }
+    return insertAfter(post,lastPost)
+  }
+  else if(mode == "index") {
+  	return insertAfter(post,document.getElementById("pc"+aPost.after_no))
+  }
+}
+
 
 // Get green post count on catalog
 function getGreenPostsCatalog(){
@@ -848,6 +900,20 @@ function postSubmitted(submit,errorCode,responseText){
 		alert(alertText)
 	}
 }
+
+//updates native 4chan posts with whatever, atm it's only fixing links
+function updatePosts() {
+  var posts=document.querySelectorAll('.postMessage:not(.interfaced)');
+    for(var i=0;i<posts.length;i++){
+    var post = posts[i];
+    post.classList.add('interfaced');
+    replaceInterfaceLinks(post);
+   }
+}
+
+// add listenering for when posts are inserted.
+document.addEventListener('4chanParsingDone',updatePosts)
+document.addEventListener('PostsInserted',updatePosts)
 
 // Stylesheet
 var stylesheet=`
