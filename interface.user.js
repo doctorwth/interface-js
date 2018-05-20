@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name        [s4s] interface
 // @namespace   s4s4s4s4s4s4s4s4s4s
-// @version     3.2
+// @version     3.3
 // @author      le fun css man AKA Doctor Worse Than Hitler, kekero
 // @email       doctorworsethanhitler@gmail.com
 // @description Lets you view the greenposts.
@@ -28,6 +28,7 @@ var updateLinks=new Set()
 var cacheCatalogPosts={}
 var mode=""
 var threadId
+var numThreads
 var pathName=location.pathname
 var threadMatch=pathName.match(/\/thread\/(\d+)/)
 if(threadMatch){
@@ -51,6 +52,7 @@ if(typeof GM=="undefined"){
 // Request green posts
 var serverurl="https://funposting.online/interface/"
 
+
 if(mode=="thread"){
 	getGreenPosts(threadId)
 }else if(mode=="catalog"){
@@ -59,9 +61,26 @@ if(mode=="thread"){
 	})
 }else if(mode=="index") {
   onPageLoad(_=>{
+    numThreads = document.getElementsByClassName("thread").length
+    
+    var observer = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        checkForIndexUpdate() // checks for and updates the index on infinite scroll
+      });
+    });
+    observer.observe(document, {childList:true, subtree:true})
+    
 		addGreenPostsToIndex()
 	})
   
+}
+
+// checks for and updates the index on infinite scroll
+function checkForIndexUpdate() {
+  if (numThreads != document.getElementsByClassName("thread").length) { 
+  	numThreads = document.getElementsByClassName("thread").length
+    addGreenPostsToIndex()
+  }
 }
 
 function addGreenPostsToIndex() {
@@ -164,7 +183,10 @@ function getGreenPosts(thread, since = 0){
             }
             else if(mode == "index") {
               for(var i=0; i< postsCount; i++){
-                addPost(postsObj[i],document.getElementById(postsObj[i].after_no))
+                // dont reinsert posts
+                if(document.getElementById('p'+postsObj[i].after_no+"-"+postsObj[i].id) === null) {
+                	addPost(postsObj[i],document.getElementById(postsObj[i].after_no))
+              	}
               }
             }
 					}
