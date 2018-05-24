@@ -11,6 +11,8 @@
 // @run-at      document-start
 // @grant       GM_xmlhttpRequest
 // @grant       GM.xmlHttpRequest
+// @grant       GM.setValue
+// @grant       GM.getValue
 // @grant       unsafeWindow
 // @icon data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHBhdGggZD0iTTAgMEgxNlYxNkgwIiBmaWxsPSIjZGZkIi8+PHBhdGggZD0iTTMgNCA2IDFoNGwzIDN2OGwtMyAzSDZMMyAxMiIgZmlsbD0iZ3JlZW4iLz48cGF0aCBkPSJtNS41IDExLjVoLTJ2LTdoMnYtM2MtMyAwLTUgMi41LTUgNi41IDAgNCAyIDYuNSA1IDYuNXptNSAzYzMgMCA1LTIuNSA1LTYuNSAwLTQtMi02LjUtNS02LjV2M2gydjdoLTJ6bS00LTRoM0wxMCAyLjVINlptMCAzaDN2LTNoLTN6IiBmaWxsPSIjZmZmIiBzdHJva2U9ImdyZWVuIi8+PC9zdmc+
 // ==/UserScript==
@@ -52,7 +54,6 @@ if(typeof GM=="undefined"){
 // Request green posts
 var serverurl="https://funposting.online/interface/"
 
-
 if(mode=="thread"){
 	getGreenPosts(threadId)
 }else if(mode=="catalog"){
@@ -62,7 +63,7 @@ if(mode=="thread"){
 }else if(mode=="index") {
   onPageLoad(_=>{
     numThreads = document.getElementsByClassName("thread").length
-    
+    // use a mutation observer to update the green posts on the index on infinite scrollio
     var observer = new MutationObserver(function (mutations) {
       mutations.forEach(function (mutation) {
         checkForIndexUpdate() // checks for and updates the index on infinite scroll
@@ -72,7 +73,6 @@ if(mode=="thread"){
     
 		addGreenPostsToIndex()
 	})
-  
 }
 
 // checks for and updates the index on infinite scroll
@@ -124,6 +124,49 @@ onPageLoad(_=>{
 	}
 })
 
+
+// watch lists
+onPageLoad(_=>{
+   // native extension watch list
+  if(document.getElementById("watchList") !== null) {
+    var observer = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        updateNativeWatchList();
+      });
+    });
+    observer.observe(document.getElementById("watchList"), {childList:true, subtree:true})
+  } 
+  ///todo: 4chan x watch list
+})
+
+// updates the native watch list
+async function updateNativeWatchList() {
+  alert('updating native watch list');
+  var watchList = document.getElementById("watchList");
+  var watchedThreads = watchList.getElementsByTagName('li');
+  if(watchedThreads !== null && watchedThreads.length > 0) {
+  	for(var i = 0; i < watchedThreads.length; i++) {
+    	var thread = watchedThreads[i].id.split('-')[1]; // format is 'watch-12345-s4s'
+			console.log(thread);
+      
+      // GM_getValue will store the ['thread' => 'last seen post'] pairs
+      var lastSeen = await GM.getValue(thread, false);
+      
+      // if we have watched this thread, we check for updates
+      if(lastSeen !== false) {
+        console.log('thread '+thread+' has has most recently viewed '+ lastSeen+'. Fetching count. ');
+        //getPostsSince
+      }
+      else {
+      	console.log('thread '+thread+' has not seen a green post before, getting latest');
+        //todo
+        //getNewestPost
+      }
+    }
+  }
+  
+}
+
 // Native extension QR
 document.addEventListener("QRNativeDialogCreation",onQRCreated)
 if(unsafeWindow.Main){
@@ -147,6 +190,7 @@ function onPageLoad(func){
 		func()
 	}
 }
+
 // replaces links like >>1234567-123 in native 4chan posts with an appropriate link back to the interface post.
 function replaceInterfaceLinks(post) {
     while(interfaceLinkRegex.test(post.innerHTML)) {
@@ -158,6 +202,44 @@ function replaceInterfaceLinks(post) {
     if(has_span) replace += '<span>'
   	post.innerHTML = post.innerHTML.replace(interfaceLinkRegex, replace)
   }
+}
+
+// gets the number of posts since the newest green post specified by the green post's interface id (the number after the -, e.g. 123456-123 is 123)
+function getCountSince(thread, newestGreenPost) {
+		GM.xmlHttpRequest({
+		method:"get",
+		url:serverurl+"watch.php?thread="+thread+((newestGreenPost != 0) ? "newestGreenPost="+newestGreenPost : ""),
+		onload:response=>{
+			if(response.status==200){
+				onPageLoad(_=>{
+					var count=JSON.parse(response.responseText)
+          return count; // server will return 0 on errors too lel					
+				})
+			}
+		},
+		onerror:response=>{
+      return 0;
+		}
+	})
+}
+
+// gets the green id of the newest green post in a thread
+function getNewestPost(thread) {
+		GM.xmlHttpRequest({
+		method:"get",
+		url:serverurl+"watch.php?thread="+thread,
+		onload:response=>{
+			if(response.status==200){
+				onPageLoad(_=>{
+					var response=JSON.parse(response.responseText)
+          return reponse; 				
+				})
+			}
+		},
+		onerror:response=>{
+      return 0;
+		}
+	})
 }
 
 // Request green posts & add them
