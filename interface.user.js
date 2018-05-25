@@ -1,7 +1,7 @@
-﻿// ==UserScript==
+// ==UserScript==
 // @name        [s4s] interface
 // @namespace   s4s4s4s4s4s4s4s4s4s
-// @version     3.2
+// @version     3.3
 // @author      le fun css man AKA Doctor Worse Than Hitler, kekero
 // @email       doctorworsethanhitler@gmail.com
 // @description Lets you view the greenposts.
@@ -11,6 +11,10 @@
 // @run-at      document-start
 // @grant       GM_xmlhttpRequest
 // @grant       GM.xmlHttpRequest
+// @grant       GM.setValue
+// @grant       GM.getValue
+// @grant       GM_setValue
+// @grant       GM_getValue
 // @grant       unsafeWindow
 // @icon data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHBhdGggZD0iTTAgMEgxNlYxNkgwIiBmaWxsPSIjZGZkIi8+PHBhdGggZD0iTTMgNCA2IDFoNGwzIDN2OGwtMyAzSDZMMyAxMiIgZmlsbD0iZ3JlZW4iLz48cGF0aCBkPSJtNS41IDExLjVoLTJ2LTdoMnYtM2MtMyAwLTUgMi41LTUgNi41IDAgNCAyIDYuNSA1IDYuNXptNSAzYzMgMCA1LTIuNSA1LTYuNSAwLTQtMi02LjUtNS02LjV2M2gydjdoLTJ6bS00LTRoM0wxMCAyLjVINlptMCAzaDN2LTNoLTN6IiBmaWxsPSIjZmZmIiBzdHJva2U9ImdyZWVuIi8+PC9zdmc+
 // ==/UserScript==
@@ -28,6 +32,7 @@ var updateLinks=new Set()
 var cacheCatalogPosts={}
 var mode=""
 var threadId
+var numThreads
 var pathName=location.pathname
 var threadMatch=pathName.match(/\/thread\/(\d+)/)
 if(threadMatch){
@@ -44,7 +49,9 @@ if(threadMatch){
 
 if(typeof GM=="undefined"){
 	window.GM={
-		xmlHttpRequest:window.GM_xmlhttpRequest
+		xmlHttpRequest:window.GM_xmlhttpRequest,
+        getValue:window.GM_getValue,
+        setValue:window.GM_setValue
 	}
 }
 
@@ -59,9 +66,25 @@ if(mode=="thread"){
 	})
 }else if(mode=="index") {
   onPageLoad(_=>{
+    numThreads = document.getElementsByClassName("thread").length
+    // use a mutation observer to update the green posts on the index on infinite scrollio
+    var observer = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        checkForIndexUpdate() // checks for and updates the index on infinite scroll
+      });
+    });
+    observer.observe(document, {childList:true, subtree:true})
+
 		addGreenPostsToIndex()
 	})
-  
+}
+
+// checks for and updates the index on infinite scroll
+function checkForIndexUpdate() {
+  if (numThreads != document.getElementsByClassName("thread").length) {
+  	numThreads = document.getElementsByClassName("thread").length
+    addGreenPostsToIndex()
+  }
 }
 
 function addGreenPostsToIndex() {
@@ -105,6 +128,49 @@ onPageLoad(_=>{
 	}
 })
 
+
+// watch lists
+onPageLoad(_=>{
+   // native extension watch list
+  if(document.getElementById("watchList") !== null) {
+    var observer = new MutationObserver(function (mutations) {
+      mutations.forEach(function (mutation) {
+        updateNativeWatchList();
+      });
+    });
+    observer.observe(document.getElementById("watchList"), {childList:true, subtree:true})
+  }
+  updateNativeWatchList() // call this once in addition to the observer to make sure it gets ran on page load even if the thread watcher doesn't refresh
+  ///todo: 4chan x watch list
+})
+
+// updates the native watch list
+async function updateNativeWatchList() {
+  var watchList = document.getElementById("watchList");
+  var watchedThreads = watchList.getElementsByTagName('li');
+  if(watchedThreads !== null && watchedThreads.length > 0) {
+  	for(var i = 0; i < watchedThreads.length; i++) {
+    	var thread = watchedThreads[i].id.split('-')[1]; // format is 'watch-12345-s4s'
+      var board = watchedThreads[i].id.split('-')[2];
+
+      // it's da [s4s] inderfase not da otherboard indaface
+      if(board != 's4s') break;
+
+      // GM_getValue will store the ['thread' => 'number of last seen posts'] pairs
+      var lastSeen = await GM.getValue(thread, false);
+
+      // if we have watched this thread, we check for updates
+      if(lastSeen !== false) {
+        getCountSince(thread, lastSeen);
+      }
+      else {
+        getNewestPost(thread);
+      }
+    }
+  }
+
+}
+
 // Native extension QR
 document.addEventListener("QRNativeDialogCreation",onQRCreated)
 if(unsafeWindow.Main){
@@ -128,6 +194,7 @@ function onPageLoad(func){
 		func()
 	}
 }
+
 // replaces links like >>1234567-123 in native 4chan posts with an appropriate link back to the interface post.
 function replaceInterfaceLinks(post) {
     while(interfaceLinkRegex.test(post.innerHTML)) {
@@ -139,6 +206,52 @@ function replaceInterfaceLinks(post) {
     if(has_span) replace += '<span>'
   	post.innerHTML = post.innerHTML.replace(interfaceLinkRegex, replace)
   }
+}
+
+// gets the number of posts since the newest green post specified by the green post's interface id (the number after the -, e.g. 123456-123 is 123)
+function getCountSince(thread, newestGreenPost) {
+		GM.xmlHttpRequest({
+		method:"get",
+		url:serverurl+"watch.php?thread="+thread+"&newestGreenPost="+newestGreenPost,
+		onload:response=>{
+			if(response.status==200){
+				onPageLoad(_=>{
+					var count=response.responseText
+          if(count > 0) {
+						updateWatchListItem(thread,count)
+          }
+				})
+			}
+		},
+		onerror:response=>{
+      return 0;
+		}
+	})
+}
+
+// todo: 4chan X
+function updateWatchListItem(thread, count) {
+	var item = query('#watch-'+thread+'-s4s > a:nth-child(2)');
+
+  if(item.classList.contains("newGreenPost")) return;
+  item.classList.add("newGreenPost");
+}
+
+// gets the green id of the newest green post in a thread
+function getNewestPost(thread) {
+		GM.xmlHttpRequest({
+		method:"get",
+		url:serverurl+"watch.php?thread="+thread,
+		onload:response=>{
+			if(response.status==200){
+				onPageLoad(_=>{
+          GM.setValue(thread, response.responseText);
+				})
+			}
+		},
+		onerror:response=>{
+		}
+	})
 }
 
 // Request green posts & add them
@@ -161,10 +274,16 @@ function getGreenPosts(thread, since = 0){
               for(var i=postsCount;i--;){
                 currentPost=addPost(postsObj[i],currentPost)
               }
+
+              // update the watchlist to say "weve seen the post lole"
+              GM.setValue(thread,postsObj[0].id)
             }
             else if(mode == "index") {
               for(var i=0; i< postsCount; i++){
-                addPost(postsObj[i],document.getElementById(postsObj[i].after_no))
+                // dont reinsert posts
+                if(document.getElementById('p'+postsObj[i].after_no+"-"+postsObj[i].id) === null) {
+                	addPost(postsObj[i],document.getElementById(postsObj[i].after_no))
+              	}
               }
             }
 					}
@@ -298,9 +417,9 @@ function addPost(aPost,currentPost){
 	if(!currentPost){
 		currentPost=query(".thread>.postContainer")
 	}
-  
+
 	var post=postJsonToElement(aPost)
-  
+
   if(mode == "thread") {
     // Add the post
     while(currentPost){
@@ -1014,6 +1133,9 @@ var stylesheet=`
 .greenPostContainer .hide-reply-button{
 	opacity:0!important;
 	pointer-events:none;
+}
+a.newGreenPost:not(:hover) {
+	color: green !important;
 }
 @media only screen and (max-width:480px){
 	.postForm .greenToggle+input{
