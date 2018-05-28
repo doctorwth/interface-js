@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        [s4s] interface
 // @namespace   s4s4s4s4s4s4s4s4s4s
-// @version     3.3
+// @version     3.31
 // @author      le fun css man AKA Doctor Worse Than Hitler, kekero
 // @email       doctorworsethanhitler@gmail.com
 // @description Lets you view the greenposts.
@@ -152,9 +152,9 @@ async function updateNativeWatchList() {
   	for(var i = 0; i < watchedThreads.length; i++) {
     	var thread = watchedThreads[i].id.split('-')[1]; // format is 'watch-12345-s4s'
       var board = watchedThreads[i].id.split('-')[2];
-
+      
       // it's da [s4s] inderfase not da otherboard indaface
-      if(board != 's4s') break;
+      if(board != 's4s') continue;
 
       // GM_getValue will store the ['thread' => 'number of last seen posts'] pairs
       var lastSeen = await GM.getValue(thread, false);
