@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        [s4s] interface
 // @namespace   s4s4s4s4s4s4s4s4s4s
-// @version     3.31
+// @version     3.33
 // @author      le fun css man AKA Doctor Worse Than Hitler, kekero
 // @email       doctorworsethanhitler@gmail.com
 // @description Lets you view the greenposts.
@@ -19,6 +19,7 @@
 // @icon data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHBhdGggZD0iTTAgMEgxNlYxNkgwIiBmaWxsPSIjZGZkIi8+PHBhdGggZD0iTTMgNCA2IDFoNGwzIDN2OGwtMyAzSDZMMyAxMiIgZmlsbD0iZ3JlZW4iLz48cGF0aCBkPSJtNS41IDExLjVoLTJ2LTdoMnYtM2MtMyAwLTUgMi41LTUgNi41IDAgNCAyIDYuNSA1IDYuNXptNSAzYzMgMCA1LTIuNSA1LTYuNSAwLTQtMi02LjUtNS02LjV2M2gydjdoLTJ6bS00LTRoM0wxMCAyLjVINlptMCAzaDN2LTNoLTN6IiBmaWxsPSIjZmZmIiBzdHJva2U9ImdyZWVuIi8+PC9zdmc+
 // ==/UserScript==
 "use strict";
+
 
 if(query("#s4sinterface-css")){
 	throw "Multiple instances of [s4s] interface detected"
@@ -57,7 +58,6 @@ if(typeof GM=="undefined"){
 
 // Request green posts
 var serverurl="https://funposting.online/interface/"
-
 if(mode=="thread"){
 	getGreenPosts(threadId)
 }else if(mode=="catalog"){
@@ -179,14 +179,6 @@ if(unsafeWindow.Main){
 	document.addEventListener("4chanMainInit",onNativeextInit)
 }
 
-// 4chan-X QR integration
-if(document.documentElement.classList.contains("fourchan-x")){
-	on4chanXInit()
-}else{
-	document.addEventListener("4chanXInitFinished",on4chanXInit)
-}
-document.addEventListener("QRDialogCreation",onQRXCreated)
-
 function onPageLoad(func){
 	if(document.readyState=="loading"){
 		addEventListener("DOMContentLoaded",func)
@@ -194,6 +186,16 @@ function onPageLoad(func){
 		func()
 	}
 }
+// firefox will (sometimes) fail to load document.documentElement until the page is loaded
+onPageLoad(_=>{
+// 4chan-X QR integration
+if(document.documentElement.classList.contains("fourchan-x")){
+	on4chanXInit()
+}else{
+	document.addEventListener("4chanXInitFinished",on4chanXInit)
+}
+document.addEventListener("QRDialogCreation",onQRXCreated)
+})
 
 // replaces links like >>1234567-123 in native 4chan posts with an appropriate link back to the interface post.
 function replaceInterfaceLinks(post) {
@@ -436,7 +438,6 @@ function addPost(aPost,currentPost){
   	return insertAfter(post,document.getElementById("pc"+aPost.after_no))
   }
 }
-
 
 // Get green post count on catalog
 function getGreenPostsCatalog(){
@@ -899,6 +900,7 @@ function showPostFormQRX(hide){
 	insertBefore(postForm.QRX.form,qrx)
 }
 
+
 // Track last used comment field for inserting quotes
 function addCommentForm(commentField,notLast){
 	if(!notLast){
@@ -1035,6 +1037,8 @@ document.addEventListener('4chanParsingDone',updatePosts)
 document.addEventListener('PostsInserted',updatePosts)
 
 // Stylesheet
+onPageLoad(_=>{
+
 var stylesheet=`
 .greenPostForm+form .postForm>tbody>tr:not(.rules),
 #quickReply .greenPostForm+form,
@@ -1137,6 +1141,10 @@ var stylesheet=`
 a.newGreenPost:not(:hover) {
 	color: green !important;
 }
+.greenPostForm {
+  display: table;
+  margin: auto;
+}
 @media only screen and (max-width:480px){
 	.postForm .greenToggle+input{
 		width:196px!important;
@@ -1157,6 +1165,7 @@ element(
 		id:"s4sinterface-css"
 	},stylesheet]
 )
+})
 
 function padding(string,num){
 	return (""+string).padStart(num,0)
